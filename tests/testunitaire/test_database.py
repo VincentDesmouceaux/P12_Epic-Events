@@ -1,5 +1,3 @@
-# tests/testunitaire/test_database.py
-
 import unittest
 from app.config.database import DatabaseConfig, DatabaseConnection
 from sqlalchemy import text
@@ -7,7 +5,7 @@ from sqlalchemy import text
 
 class TestDatabaseConnection(unittest.TestCase):
     """
-    Classe de tests unitaires pour la connexion à la base de données.
+    Classe de tests unitaires pour la connexion à la base de données MySQL.
     """
 
     def setUp(self):
@@ -23,7 +21,7 @@ class TestDatabaseConnection(unittest.TestCase):
         Méthode appelée après chaque test.
         Ici, on pourrait fermer ou nettoyer la DB, si besoin.
         """
-        pass  # Rien de particulier à faire dans cet exemple
+        pass
 
     def test_session_creation(self):
         """
@@ -34,6 +32,9 @@ class TestDatabaseConnection(unittest.TestCase):
         session.close()
 
     def test_select_one(self):
+        """
+        Exécute une requête simple pour vérifier que la base MySQL répond.
+        """
         session = self.db_connection.create_session()
         result = session.execute(text("SELECT 1"))
         row = result.fetchone()

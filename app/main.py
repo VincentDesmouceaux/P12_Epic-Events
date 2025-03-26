@@ -1,5 +1,3 @@
-# app/main.py
-
 from app.config.database import DatabaseConfig, DatabaseConnection
 
 
@@ -10,7 +8,7 @@ class EpicEventsCRM:
     """
 
     def __init__(self):
-        # 1. Configuration (lit .env si présent)
+        # 1. Configuration (lit .env si présent, MySQL par défaut)
         self.db_config = DatabaseConfig()
 
         # 2. Connexion DB
@@ -20,19 +18,17 @@ class EpicEventsCRM:
         """
         Méthode principale pour lancer l'application CLI.
         """
-        print("Bienvenue dans Epic Events CRM !")
+        print("Bienvenue dans Epic Events CRM ! (MySQL)")
 
         # Vérifier la connexion en se connectant une fois à la base
         with self.db_connection.engine.connect() as conn:
             print("Connexion à la base réussie.")
 
-        # Ici, vous pourrez ajouter la logique du programme,
-        # par exemple:
-        #   - Creation des tables
-        #   - Menu CLI
-        #   - etc.
-        # Exemple :
-        #   Base.metadata.create_all(bind=self.db_connection.engine)
+        # Ici, vous pourrez ajouter la logique du programme :
+        # - création des tables
+        # - menu CLI
+        # - etc.
+        # Ex: Base.metadata.create_all(bind=self.db_connection.engine)
 
 
 def main():

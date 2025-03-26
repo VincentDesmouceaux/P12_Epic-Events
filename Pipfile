@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 sqlalchemy = "*"
 python-dotenv = "*"
+pymysql = "*"
+cryptography = "*"
 
 [dev-packages]
 
