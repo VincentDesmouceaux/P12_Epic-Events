@@ -1,82 +1,108 @@
 import unittest
 from io import StringIO
 import sys
-from unittest.mock import patch
+import builtins
 
 from app.views.login_view import LoginView
-from app.config.database import DatabaseConfig, DatabaseConnection
 from app.authentification.auth_controller import AuthController
-from app.models import Base
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from app.models.role import Role
+
+# DummyDBConnection simule une connexion à la base (SQLite en mémoire) pour les tests
+
+
+class DummyDBConnection:
+    def __init__(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        self.engine = create_engine('sqlite:///:memory:', echo=False)
+        self.SessionLocal = sessionmaker(bind=self.engine)
+
+    def create_session(self):
+        return self.SessionLocal()
 
 
 class TestLoginView(unittest.TestCase):
-    """
-    Tests unitaires pour la vue de connexion (LoginView)
-    """
-
     def setUp(self):
-        # Créer une base de données SQLite en mémoire pour les tests
-        self.engine = create_engine('sqlite:///:memory:', echo=False)
-        Base.metadata.create_all(self.engine)
-        Session = sessionmaker(bind=self.engine)
-        session = Session()
+        # Sauvegarde de la fonction input d'origine
+        self.original_input = builtins.input
+        # Instanciation d'une connexion dummy
+        self.db_conn = DummyDBConnection()
+        # Instanciation de LoginView en lui passant la connexion dummy
+        self.login_view = LoginView(self.db_conn)
 
-        # Insérer un rôle de test (ex: "commercial")
-        test_role = Role(name="commercial", description="Rôle de test")
-        session.add(test_role)
-        session.commit()
+    def tearDown(self):
+        # Restauration de la fonction input d'origine
+        builtins.input = self.original_input
 
-        # Initialiser l'AuthController et enregistrer un utilisateur de test
-        auth_ctrl = AuthController()
-        # On enregistre l'utilisateur avec email "test@example.com" et mot de passe "password123"
-        auth_ctrl.register_user(
-            session=session,
-            employee_number="EMP100",
-            first_name="Test",
-            last_name="User",
-            email="test@example.com",
-            password="password123",
-            role_id=test_role.id
-        )
-        session.close()
+    def fake_input(self, values):
+        """Renvoie une fonction input simulée qui affiche le prompt et retourne les valeurs successivement."""
+        self._input_values = iter(values)
 
-        # Instancier LoginView et forcer l'utilisation de notre base en mémoire
-        self.login_view = LoginView()
-        # Remplacer l'engine et la factory de sessions de la connexion pour utiliser la DB en mémoire
-        self.login_view.db_conn.engine = self.engine
-        self.login_view.db_conn.SessionLocal = Session
-        # Utiliser notre instance d'AuthController (pour garantir la cohérence)
-        self.login_view.auth_controller = auth_ctrl
+        def fake_input_fn(prompt=""):
+            print(prompt, end="")  # Simule l'affichage du prompt
+            return next(self._input_values)
+        return fake_input_fn
 
     def test_login_success(self):
         """
         Vérifie que le login réussit avec les bonnes informations.
+        Pour ce test, nous patchons temporairement la méthode authenticate_user de AuthController.
         """
-        # Simuler l'input utilisateur pour email et mot de passe corrects
-        with patch('builtins.input', side_effect=["test@example.com", "password123"]):
-            captured_output = StringIO()
-            sys.stdout = captured_output
-            self.login_view.login()
-            sys.stdout = sys.__stdout__
-            output = captured_output.getvalue()
-            self.assertIn("Authentification réussie", output)
-            self.assertIn("Votre jeton JWT est :", output)
+        auth_ctrl = AuthController()
+        original_authenticate = auth_ctrl.authenticate_user
+
+        def dummy_authenticate(session, email_arg, password_arg):
+            if email_arg == "test@example.com" and password_arg == "password123":
+                class DummyRole:
+                    name = "commercial"
+
+                class DummyUser:
+                    def __init__(self, email):
+                        self.id = 1
+                        self.email = email
+                        self.role = DummyRole()
+                return DummyUser(email_arg)
+            return None
+
+        auth_ctrl.authenticate_user = dummy_authenticate
+        self.login_view.auth_controller = auth_ctrl
+
+        builtins.input = self.fake_input(["test@example.com", "password123"])
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        self.login_view.login()
+
+        sys.stdout = sys.__stdout__
+        output = captured_output.getvalue()
+        self.assertIn("Authentification réussie", output)
+        self.assertIn("Votre jeton JWT est :", output)
+        auth_ctrl.authenticate_user = original_authenticate
 
     def test_login_failure(self):
         """
         Vérifie que le login échoue avec un mauvais mot de passe.
         """
-        with patch('builtins.input', side_effect=["test@example.com", "wrongpassword"]):
-            captured_output = StringIO()
-            sys.stdout = captured_output
-            self.login_view.login()
-            sys.stdout = sys.__stdout__
-            output = captured_output.getvalue()
-            self.assertIn("Échec de l'authentification", output)
+        auth_ctrl = AuthController()
+        original_authenticate = auth_ctrl.authenticate_user
+
+        def dummy_authenticate(session, email_arg, password_arg):
+            return None
+
+        auth_ctrl.authenticate_user = dummy_authenticate
+        self.login_view.auth_controller = auth_ctrl
+
+        builtins.input = self.fake_input(
+            ["wrong@example.com", "wrongpassword"])
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        self.login_view.login()
+
+        sys.stdout = sys.__stdout__
+        output = captured_output.getvalue()
+        self.assertIn("Échec de l'authentification", output)
+        auth_ctrl.authenticate_user = original_authenticate
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -1,40 +1,31 @@
 from app.config.database import DatabaseConfig, DatabaseConnection
+from app.views.main_menu import MainMenu
 
 
 class EpicEventsCRM:
     """
     Classe principale qui gère l'application CLI Epic Events.
-    Elle utilise la config et la connexion DB pour fonctionner.
+    Elle utilise la configuration et la connexion à la BDD pour fonctionner.
     """
 
     def __init__(self):
-        # 1. Configuration (lit .env si présent, MySQL par défaut)
+        # 1. Chargement de la configuration (via .env, MySQL par défaut)
         self.db_config = DatabaseConfig()
-
-        # 2. Connexion DB
+        # 2. Création de la connexion à la base de données
         self.db_connection = DatabaseConnection(self.db_config)
 
     def run(self):
         """
-        Méthode principale pour lancer l'application CLI.
+        Lance le menu principal de l'application en appelant les vues appropriées.
+        Aucun affichage n'est directement fait ici, la vue s'en charge.
         """
-        print("Bienvenue dans Epic Events CRM ! (MySQL)")
-
-        # Vérifier la connexion en se connectant une fois à la base
-        with self.db_connection.engine.connect() as conn:
-            print("Connexion à la base réussie.")
-
-        # Ici, vous pourrez ajouter la logique du programme :
-        # - création des tables
-        # - menu CLI
-        # - etc.
-        # Ex: Base.metadata.create_all(bind=self.db_connection.engine)
+        # Instanciation du menu principal en passant la connexion (pour que les vues l'utilisent)
+        menu = MainMenu(self.db_connection)
+        menu.show()
 
 
 def main():
-    # Instancie la classe principale
     app = EpicEventsCRM()
-    # Lance l'application
     app.run()
 
 
