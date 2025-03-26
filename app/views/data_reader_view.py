@@ -3,8 +3,8 @@ from app.controllers.data_reader import DataReader
 
 class DataReaderView:
     """
-    Vue de lecture des données de l'application CRM.
-    Utilise DataReader pour récupérer les données.
+    Vue pour l'affichage des données de l'application CRM.
+    Utilise DataReader pour récupérer et afficher les données.
     """
 
     def __init__(self, db_connection):
@@ -25,7 +25,6 @@ class DataReaderView:
 
 
 def main():
-    # Permet l'exécution autonome pour tester la vue DataReader
     from app.config.database import DatabaseConfig, DatabaseConnection
     db_config = DatabaseConfig()
     db_conn = DatabaseConnection(db_config)

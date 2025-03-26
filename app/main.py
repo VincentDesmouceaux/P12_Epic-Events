@@ -17,9 +17,8 @@ class EpicEventsCRM:
     def run(self):
         """
         Lance le menu principal de l'application en appelant les vues appropriées.
-        Aucun affichage n'est directement fait ici, la vue s'en charge.
+        Aucun affichage direct n'est fait ici, la vue MainMenu s'en charge.
         """
-        # Instanciation du menu principal en passant la connexion (pour que les vues l'utilisent)
         menu = MainMenu(self.db_connection)
         menu.show()
 

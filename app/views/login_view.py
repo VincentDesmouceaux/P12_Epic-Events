@@ -3,7 +3,7 @@ from app.authentification.auth_controller import AuthController
 
 class LoginView:
     """
-    Classe de vue pour la connexion de l'utilisateur.
+    Vue pour la connexion de l'utilisateur.
     Gère l'authentification via AuthController.
     """
 
@@ -26,7 +26,6 @@ class LoginView:
 
 
 def main():
-    # Permet l'exécution autonome pour tester la vue de login
     from app.config.database import DatabaseConfig, DatabaseConnection
     db_config = DatabaseConfig()
     db_conn = DatabaseConnection(db_config)
