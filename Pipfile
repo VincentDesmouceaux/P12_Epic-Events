@@ -8,6 +8,7 @@ sqlalchemy = "*"
 python-dotenv = "*"
 pymysql = "*"
 cryptography = "*"
+argon2-cffi = "*"
 
 [dev-packages]
 
