@@ -6,11 +6,11 @@ name = "pypi"
 [packages]
 sqlalchemy = "*"
 python-dotenv = "*"
-pymysql = "*"
 cryptography = "*"
 argon2-cffi = "*"
 pyjwt = "*"
 click = "*"
+pymysql = "*"
 
 [dev-packages]
 
