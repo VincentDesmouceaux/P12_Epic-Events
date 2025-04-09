@@ -10,6 +10,7 @@ pymysql = "*"
 cryptography = "*"
 argon2-cffi = "*"
 pyjwt = "*"
+click = "*"
 
 [dev-packages]
 

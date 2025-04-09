@@ -6,7 +6,7 @@ from app.models.event import Event
 
 class DataWriter:
     """
-    Classe responsable de la création et de la mise à jour des données
+    Classe responsable de la création et la mise à jour des données
     dans la base, en appliquant une validation basique et un contrôle des permissions.
 
     Seules les actions autorisées selon le rôle de l'utilisateur (présent dans current_user)
@@ -36,6 +36,8 @@ class DataWriter:
         """
         Crée un nouvel utilisateur (collaborateur). Accessible uniquement aux utilisateurs du rôle "gestion".
         """
+        print(
+            f"[DEBUG create_user] current_user={current_user}, role_id={role_id}")
         self._check_permission(current_user, ["gestion"])
         new_user = User(
             employee_number=employee_number,
@@ -46,7 +48,13 @@ class DataWriter:
             role_id=role_id
         )
         session.add(new_user)
-        session.commit()
+        try:
+            session.commit()
+            print(f"[DEBUG create_user] Commit OK. new_user.id={new_user.id}")
+        except Exception as e:
+            print("[DEBUG create_user] Commit FAILED:", e)
+            session.rollback()
+            return None
         return new_user
 
     def update_user(self, session, current_user, user_id, **kwargs):
@@ -58,7 +66,6 @@ class DataWriter:
         user = session.query(User).filter_by(id=user_id).first()
         if not user:
             raise Exception("Collaborateur non trouvé.")
-        # Validation basique des champs mis à jour
         for field, value in kwargs.items():
             if hasattr(user, field):
                 setattr(user, field, value)
@@ -67,9 +74,6 @@ class DataWriter:
 
     # --- Client ---
     def create_client(self, session, current_user, full_name, email, phone, company_name, commercial_id):
-        """
-        Crée un client. Accessible aux rôles "gestion" et "commercial".
-        """
         self._check_permission(current_user, ["gestion", "commercial"])
         new_client = Client(
             full_name=full_name,
@@ -83,10 +87,6 @@ class DataWriter:
         return new_client
 
     def update_client(self, session, current_user, client_id, **kwargs):
-        """
-        Met à jour un client existant.
-        Accessible aux rôles "gestion" et "commercial".
-        """
         self._check_permission(current_user, ["gestion", "commercial"])
         client = session.query(Client).filter_by(id=client_id).first()
         if not client:
@@ -99,10 +99,6 @@ class DataWriter:
 
     # --- Contrat ---
     def create_contract(self, session, current_user, client_id, commercial_id, total_amount, remaining_amount, is_signed=False):
-        """
-        Crée un contrat associé à un client et à un commercial.
-        Accessible aux rôles "gestion" et "commercial".
-        """
         self._check_permission(current_user, ["gestion", "commercial"])
         new_contract = Contract(
             client_id=client_id,
@@ -116,10 +112,6 @@ class DataWriter:
         return new_contract
 
     def update_contract(self, session, current_user, contract_id, **kwargs):
-        """
-        Met à jour un contrat existant (tous les champs, y compris relationnels).
-        Accessible aux rôles "gestion" et "commercial".
-        """
         self._check_permission(current_user, ["gestion", "commercial"])
         contract = session.query(Contract).filter_by(id=contract_id).first()
         if not contract:
@@ -132,10 +124,6 @@ class DataWriter:
 
     # --- Événement ---
     def create_event(self, session, current_user, contract_id, support_id, date_start, date_end, location, attendees, notes):
-        """
-        Crée un événement associé à un contrat et attribué à un support.
-        Accessible aux rôles "gestion", "commercial" et "support".
-        """
         self._check_permission(
             current_user, ["gestion", "commercial", "support"])
         new_event = Event(
@@ -152,10 +140,6 @@ class DataWriter:
         return new_event
 
     def update_event(self, session, current_user, event_id, **kwargs):
-        """
-        Met à jour un événement existant (tous les champs, y compris relationnels).
-        Accessible aux rôles "gestion", "commercial" et "support".
-        """
         self._check_permission(
             current_user, ["gestion", "commercial", "support"])
         event = session.query(Event).filter_by(id=event_id).first()
