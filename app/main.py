@@ -13,7 +13,7 @@ class EpicEventsCRM:
         self.db_connection = DatabaseConnection(self.db_config)
 
     def run(self):
-        # Lance notre nouveau CLIInterface
+        # Lance l'interface CLI
         interface = CLIInterface(self.db_connection)
         interface.run()
 

@@ -1,5 +1,4 @@
 # seed_db.py
-import os
 import datetime
 from app.config.database import DatabaseConfig, DatabaseConnection
 from app.models import Base
@@ -13,19 +12,20 @@ from app.models.event import Event
 def seed_db():
     """
     Cette fonction initialise la base de données avec des données d'exemple.
-    Elle crée d'abord toutes les tables puis insère :
-      - Des rôles pour les différents départements.
-      - Des utilisateurs (collaborateurs) assignés aux rôles.
-      - Un client associé à un commercial.
-      - Un contrat associé à ce client et au commercial.
-      - Un événement associé au contrat et affecté à un support.
+    Elle effectue les actions suivantes :
+      - Crée (si besoin) les tables.
+      - Insère des rôles (commercial, support, gestion) si non existants.
+      - Insère des utilisateurs exemple pour chaque département.
+      - Insère un client associé à un commercial.
+      - Insère un contrat pour ce client.
+      - Insère un événement pour ce contrat.
     """
     # Initialisation de la configuration et de la connexion à la DB
     config = DatabaseConfig()
     connection = DatabaseConnection(config)
     engine = connection.engine
 
-    # Création des tables (si elles n'existent pas déjà)
+    # Créer les tables si elles n'existent pas déjà
     Base.metadata.create_all(bind=engine)
     print("Tables créées avec succès.")
 
@@ -33,8 +33,7 @@ def seed_db():
     Session = connection.SessionLocal
     session = Session()
 
-    # Insertion des rôles (si non existants)
-    # On définit trois rôles : commercial, support et gestion
+    # Insertion des rôles
     roles_definitions = {
         "commercial": "Département commercial",
         "support": "Département support",
@@ -52,15 +51,13 @@ def seed_db():
             print(f"Role '{role_name}' existe déjà avec ID={role.id}.")
         inserted_roles[role_name] = role
 
-    # Insertion d'exemples d'utilisateurs (collaborateurs)
-    # Pour cet exemple, nous créons un collaborateur pour chaque département.
+    # Insertion des utilisateurs
     users_data = [
         {
             "employee_number": "G001",
             "first_name": "Alice",
             "last_name": "Gestion",
             "email": "alice.gestion@example.com",
-            # Remplacer par un hash réel en prod.
             "password_hash": "hashed_gestion",
             "role": "gestion"
         },
@@ -165,7 +162,6 @@ def seed_db():
     print("Contrat ID :", contract.id)
     print("Événement ID :", event.id)
 
-    # Fermeture de la session
     session.close()
     print("Initialisation terminée.")
 
