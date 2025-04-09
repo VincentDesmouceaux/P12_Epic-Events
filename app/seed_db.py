@@ -1,4 +1,5 @@
-# seed_db.py
+# app/seed_db.py
+
 import datetime
 from app.config.database import DatabaseConfig, DatabaseConnection
 from app.models import Base
@@ -8,14 +9,17 @@ from app.models.client import Client
 from app.models.contract import Contract
 from app.models.event import Event
 
+# Importation du contrôleur pour utiliser le hasher d'argon2
+from app.authentification.auth_controller import AuthController
+
 
 def seed_db():
     """
-    Cette fonction initialise la base de données avec des données d'exemple.
-    Elle effectue les actions suivantes :
-      - Crée (si besoin) les tables.
-      - Insère des rôles (commercial, support, gestion) si non existants.
-      - Insère des utilisateurs exemple pour chaque département.
+    Initialise la base de données avec des données d'exemple.
+    Le script effectue les actions suivantes :
+      - Vide les tables existantes (pour éviter les doublons) puis recrée le schéma.
+      - Insère des rôles pour les différents départements.
+      - Insère des utilisateurs (collaborateurs) avec des mots de passe correctement hachés.
       - Insère un client associé à un commercial.
       - Insère un contrat pour ce client.
       - Insère un événement pour ce contrat.
@@ -25,7 +29,10 @@ def seed_db():
     connection = DatabaseConnection(config)
     engine = connection.engine
 
-    # Créer les tables si elles n'existent pas déjà
+    # Pour être sûr qu'on a un schéma propre, on vide d'abord les tables (drop) puis on recrée
+    print("Suppression éventuelle des anciennes tables...")
+    Base.metadata.drop_all(bind=engine)
+    print("Création des nouvelles tables...")
     Base.metadata.create_all(bind=engine)
     print("Tables créées avec succès.")
 
@@ -33,7 +40,10 @@ def seed_db():
     Session = connection.SessionLocal
     session = Session()
 
-    # Insertion des rôles
+    # Instanciation d'AuthController pour hacher les mots de passe
+    auth_controller = AuthController()
+
+    # Insertion des rôles (on définit trois rôles : commercial, support, gestion)
     roles_definitions = {
         "commercial": "Département commercial",
         "support": "Département support",
@@ -51,14 +61,15 @@ def seed_db():
             print(f"Role '{role_name}' existe déjà avec ID={role.id}.")
         inserted_roles[role_name] = role
 
-    # Insertion des utilisateurs
+    # Insertion d'exemples d'utilisateurs pour chaque département.
+    # Pour générer le hash du mot de passe, on utilise auth_controller.hasher.hash()
     users_data = [
         {
             "employee_number": "G001",
             "first_name": "Alice",
             "last_name": "Gestion",
             "email": "alice.gestion@example.com",
-            "password_hash": "hashed_gestion",
+            "password": "SuperSecretGestion",  # Mot de passe en clair
             "role": "gestion"
         },
         {
@@ -66,7 +77,7 @@ def seed_db():
             "first_name": "Bob",
             "last_name": "Commercial",
             "email": "bob.commercial@example.com",
-            "password_hash": "hashed_commercial",
+            "password": "SuperSecretCommercial",
             "role": "commercial"
         },
         {
@@ -74,7 +85,7 @@ def seed_db():
             "first_name": "Charlie",
             "last_name": "Support",
             "email": "charlie.support@example.com",
-            "password_hash": "hashed_support",
+            "password": "SuperSecretSupport",
             "role": "support"
         }
     ]
@@ -82,12 +93,14 @@ def seed_db():
     for user_data in users_data:
         user = session.query(User).filter_by(email=user_data["email"]).first()
         if not user:
+            # Hachage du mot de passe fourni
+            password_hash = auth_controller.hasher.hash(user_data["password"])
             user = User(
                 employee_number=user_data["employee_number"],
                 first_name=user_data["first_name"],
                 last_name=user_data["last_name"],
                 email=user_data["email"],
-                password_hash=user_data["password_hash"],
+                password_hash=password_hash,
                 role_id=inserted_roles[user_data["role"]].id
             )
             session.add(user)
@@ -97,7 +110,7 @@ def seed_db():
             print(f"Utilisateur '{user.email}' existe déjà avec ID={user.id}.")
         inserted_users[user_data["role"]] = user
 
-    # Insertion d'un client
+    # Insertion d'un client associé au commercial
     client = session.query(Client).filter_by(email="kevin@startup.io").first()
     if not client:
         client = Client(
@@ -152,7 +165,7 @@ def seed_db():
         print(
             f"Un événement existe déjà pour le contrat ID={contract.id} avec ID={event.id}.")
 
-    # Afficher un récapitulatif
+    # Récapitulatif
     print("\n--- Récapitulatif de l'initialisation ---")
     print("Rôles insérés :", {
           role: inserted_roles[role].id for role in inserted_roles})

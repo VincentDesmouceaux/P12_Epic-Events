@@ -1,4 +1,5 @@
-# init_db.py
+# app/init_db.py
+
 from app.config.database import DatabaseConfig, DatabaseConnection
 from app.models import Base
 
