@@ -1,6 +1,5 @@
-# app/models/role.py
 from sqlalchemy import Column, Integer, String
-from app.models import Base
+from app.models.base import Base
 
 
 class Role(Base):

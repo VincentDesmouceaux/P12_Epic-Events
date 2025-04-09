@@ -1,6 +1,6 @@
-# app/models/__init__.py
-
-from sqlalchemy.ext.declarative import declarative_base
-
-# Base pour toutes les tables
-Base = declarative_base()
+from .base import Base  # On importe Base défini dans base.py
+from .role import Role
+from .user import User
+from .client import Client
+from .contract import Contract
+from .event import Event
