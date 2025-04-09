@@ -11,6 +11,7 @@ argon2-cffi = "*"
 pyjwt = "*"
 click = "*"
 pymysql = "*"
+coverage = "*"
 
 [dev-packages]
 
