@@ -1,4 +1,3 @@
-# app/authentification/auth_controller.py
 import os
 import datetime
 import jwt

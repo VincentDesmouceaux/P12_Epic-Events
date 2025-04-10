@@ -6,11 +6,6 @@ from app.views.data_writer_view import DataWriterView
 
 
 class CLIInterface(GenericView):
-    """
-    Interface CLI interactive regroupant LoginView, DataReaderView et DataWriterView.
-    Hérite de GenericView pour l'affichage coloré.
-    """
-
     def __init__(self, db_connection):
         super().__init__()
         self.db_connection = db_connection
@@ -51,7 +46,6 @@ class CLIInterface(GenericView):
         user = self.login_view.login_with_credentials_return_user(
             email, password)
         if user:
-            # Assurez-vous que le dummy login en test retourne un rôle avec un id
             self.current_user = {
                 "id": user.id, "role": user.role.name, "role_id": getattr(user.role, "id", 3)}
             self.print_green(
@@ -106,6 +100,148 @@ class CLIInterface(GenericView):
             else:
                 self.print_red("Option invalide.")
 
+    def menu_contract(self):
+        self.print_header("\n-- Gestion des contrats --")
+        print(self.BLUE + "[1] Créer un contrat" + self.END)
+        print(self.BLUE + "[2] Modifier un contrat" + self.END)
+        print(self.BLUE + "[3] Retour" + self.END)
+        choice = input(self.CYAN + "Choix : " + self.END).strip()
+        if choice == "1":
+            client_id_str = input(self.CYAN + "ID du client : " + self.END)
+            try:
+                client_id = int(client_id_str)
+            except:
+                self.print_red("ID client invalide.")
+                return
+            total_amount_str = input(self.CYAN + "Montant total : " + self.END)
+            remaining_amount_str = input(
+                self.CYAN + "Montant restant : " + self.END)
+            try:
+                total_amount = float(total_amount_str)
+                remaining_amount = float(remaining_amount_str)
+            except:
+                self.print_red("Montants invalides.")
+                return
+            signed_str = input(
+                self.CYAN + "Contrat signé ? (O/N) : " + self.END).strip().upper()
+            is_signed = True if signed_str == "O" else False
+            session = self.db_connection.create_session()
+            try:
+                contract = self.writer_view.writer.create_contract(
+                    session,
+                    self.current_user,
+                    client_id,
+                    total_amount,
+                    remaining_amount,
+                    is_signed
+                )
+                self.print_green("Contrat créé avec ID = " + str(contract.id))
+            except Exception as e:
+                self.print_red(
+                    "Erreur lors de la création du contrat : " + str(e))
+                session.rollback()
+            finally:
+                session.close()
+        elif choice == "2":
+            contract_id_str = input(
+                self.CYAN + "ID du contrat à modifier : " + self.END)
+            try:
+                contract_id = int(contract_id_str)
+            except:
+                self.print_red("ID contrat invalide.")
+                return
+            remaining_amount_str = input(
+                self.CYAN + "Nouveau montant restant : " + self.END)
+            signed_str = input(
+                self.CYAN + "Contrat signé ? (O/N) : " + self.END).strip().upper()
+            try:
+                remaining_amount = float(remaining_amount_str)
+            except:
+                self.print_red("Montant invalide.")
+                return
+            is_signed = True if signed_str == "O" else False
+            session = self.db_connection.create_session()
+            try:
+                updated_contract = self.writer_view.writer.update_contract(
+                    session,
+                    self.current_user,
+                    contract_id,
+                    remaining_amount=remaining_amount,
+                    is_signed=is_signed
+                )
+                self.print_green(
+                    "Contrat mis à jour, montant restant = " + str(updated_contract.remaining_amount))
+            except Exception as e:
+                self.print_red(
+                    "Erreur lors de la modification du contrat : " + str(e))
+                session.rollback()
+            finally:
+                session.close()
+        elif choice == "3":
+            return
+        else:
+            self.print_red("Option invalide.")
+
+    def menu_event(self):
+        self.print_header("\n-- Gestion des événements --")
+        print(self.BLUE +
+              "[1] Consulter les événements sans support" + self.END)
+        print(self.BLUE +
+              "[2] Modifier un événement pour assigner un support" + self.END)
+        print(self.BLUE + "[3] Retour" + self.END)
+        choice = input(self.CYAN + "Choix : " + self.END).strip()
+        if choice == "1":
+            session = self.db_connection.create_session()
+            try:
+                from app.models.event import Event
+                events = session.query(Event).filter(
+                    Event.support_id == None).all()
+                if events:
+                    self.print_green("Événements sans support:")
+                    for event in events:
+                        self.print_blue(self.reader_view.format_entity(event))
+                else:
+                    self.print_yellow("Aucun événement sans support.")
+            except Exception as e:
+                self.print_red("Erreur lors de la consultation : " + str(e))
+            finally:
+                session.close()
+        elif choice == "2":
+            event_id_str = input(
+                self.CYAN + "ID de l'événement à modifier : " + self.END)
+            try:
+                event_id = int(event_id_str)
+            except:
+                self.print_red("ID invalide.")
+                return
+            support_id_str = input(
+                self.CYAN + "ID du collaborateur support à assigner : " + self.END)
+            try:
+                support_id = int(support_id_str)
+            except:
+                self.print_red("ID support invalide.")
+                return
+            session = self.db_connection.create_session()
+            try:
+                updated_event = self.writer_view.writer.update_event(
+                    session,
+                    self.current_user,
+                    event_id,
+                    support_id=support_id
+                )
+                self.print_green(
+                    "Événement mis à jour, support assigné = " + str(updated_event.support_id))
+            except Exception as e:
+                self.print_red(
+                    "Erreur lors de la modification de l'événement : " + str(e))
+                session.rollback()
+            finally:
+                session.close()
+        elif choice == "3":
+            return
+        else:
+            self.print_red("Option invalide.")
+
     def menu_collaborator(self):
         self.print_header("\n-- Gestion des collaborateurs --")
         print(self.BLUE + "[1] Créer un collaborateur" + self.END)
@@ -114,7 +250,6 @@ class CLIInterface(GenericView):
         print(self.BLUE + "[4] Retour" + self.END)
         choice = input(self.CYAN + "Choix : " + self.END).strip()
         if choice == "1":
-            # Création : le numéro est généré automatiquement
             fname = input(self.CYAN + "Prénom : " + self.END)
             lname = input(self.CYAN + "Nom : " + self.END)
             email = input(self.CYAN + "Email : " + self.END)
@@ -126,7 +261,7 @@ class CLIInterface(GenericView):
             except ValueError:
                 self.print_red("Role ID invalide.")
                 return
-            self.current_user["role_id"] = role_id  # Mémoriser le rôle choisi
+            self.current_user["role_id"] = role_id
             self.writer_view.create_user_cli(
                 self.current_user, fname, lname, email, password)
         elif choice == "2":
@@ -163,16 +298,6 @@ class CLIInterface(GenericView):
                 session.close()
         elif choice == "4":
             return
-
-    def menu_contract(self):
-        self.print_header("\n-- Gestion des contrats --")
-        self.print_yellow("Fonctionnalité à implémenter.")
-        input(self.CYAN + "Appuyez sur Entrée pour revenir." + self.END)
-
-    def menu_event(self):
-        self.print_header("\n-- Gestion des événements --")
-        self.print_yellow("Fonctionnalité à implémenter.")
-        input(self.CYAN + "Appuyez sur Entrée pour revenir." + self.END)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,3 @@
-# tests/testunitaire/test_data_writer_view.py
 import unittest
 from datetime import datetime
 from sqlalchemy import create_engine
@@ -42,15 +41,8 @@ class TestDataWriterView(unittest.TestCase):
         self.db_conn.engine.dispose()
 
     def test_run_creates_and_updates_entities(self):
-        """
-        Vérifie que DataWriterView.run() crée et met à jour correctement l'utilisateur,
-        le contrat et l'événement. On recherche le collaborateur par employee_number "G001"
-        (auto-généré), et non "EMP123".
-        """
         self.view.run()
-
         session = self.db_conn.create_session()
-        # On cherche désormais par numéro auto-généré "G001"
         user = session.query(User).filter_by(employee_number="G001").first()
         if user is None:
             print("DEBUG : Aucun utilisateur trouvé avec employee_number G001")
@@ -60,13 +52,11 @@ class TestDataWriterView(unittest.TestCase):
                              "Le prénom doit être mis à jour à 'Jean-Pierre'.")
             self.assertEqual(user.email, "jp.dupont@example.com",
                              "L'email doit être mis à jour à 'jp.dupont@example.com'.")
-
         contract = session.query(Contract).first()
         self.assertIsNotNone(contract, "Le contrat doit être créé.")
         if contract:
             self.assertEqual(contract.total_amount, 10000.0,
                              "Le montant total doit être 10000.0.")
-
         event = session.query(Event).first()
         self.assertIsNotNone(event, "L'événement doit être créé.")
         if event:

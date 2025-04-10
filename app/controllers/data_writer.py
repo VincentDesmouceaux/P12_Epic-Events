@@ -3,15 +3,10 @@ from app.models.user import User
 from app.models.client import Client
 from app.models.contract import Contract
 from app.models.event import Event
-from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 
 class DataWriter:
-    """
-    Classe responsable de la création, mise à jour et suppression des données
-    dans la base. Les actions sont contrôlées par le rôle de l'utilisateur.
-    """
-
     def __init__(self, db_connection):
         self.db_connection = db_connection
 
@@ -36,7 +31,6 @@ class DataWriter:
 
     def _generate_employee_number(self, session, role_id):
         prefix = self._get_prefix_for_role(role_id)
-        # Récupère le maximum numérique parmi les employee_number du rôle donné
         max_num = 0
         results = session.query(User.employee_number).filter(
             User.role_id == role_id).all()
@@ -52,11 +46,6 @@ class DataWriter:
 
     # --- Collaborateur ---
     def create_user(self, session, current_user, employee_number, first_name, last_name, email, password_hash, role_id):
-        """
-        Crée un nouveau collaborateur.
-        Si employee_number est vide, il est auto‑généré.
-        Accessible uniquement aux utilisateurs "gestion".
-        """
         self._check_permission(current_user, ["gestion"])
         if not employee_number:
             employee_number = self._generate_employee_number(session, role_id)
@@ -71,17 +60,17 @@ class DataWriter:
         session.add(new_user)
         try:
             session.commit()
-        except Exception as e:
+        except IntegrityError as e:
             session.rollback()
+            # On retourne l'utilisateur existant si l'email existe déjà
+            existing = session.query(User).filter_by(email=email).first()
+            if existing:
+                return existing
             raise Exception(
                 f"Erreur lors de la création de l'utilisateur : {e}")
         return new_user
 
     def update_user(self, session, current_user, user_id, **kwargs):
-        """
-        Met à jour un collaborateur identifié par son ID.
-        Accessible uniquement aux utilisateurs "gestion".
-        """
         self._check_permission(current_user, ["gestion"])
         user = session.query(User).filter_by(id=user_id).first()
         if not user:
@@ -93,10 +82,6 @@ class DataWriter:
         return user
 
     def update_user_by_employee_number(self, session, current_user, employee_number, **kwargs):
-        """
-        Met à jour un collaborateur identifié par son employee_number.
-        Accessible uniquement aux utilisateurs "gestion".
-        """
         self._check_permission(current_user, ["gestion"])
         user = session.query(User).filter_by(
             employee_number=employee_number).first()
@@ -110,10 +95,6 @@ class DataWriter:
         return user
 
     def delete_user(self, session, current_user, employee_number):
-        """
-        Supprime un collaborateur identifié par son employee_number.
-        Accessible uniquement aux utilisateurs "gestion".
-        """
         self._check_permission(current_user, ["gestion"])
         user = session.query(User).filter_by(
             employee_number=employee_number).first()
@@ -150,11 +131,19 @@ class DataWriter:
         return client
 
     # --- Contrat ---
-    def create_contract(self, session, current_user, client_id, commercial_id, total_amount, remaining_amount, is_signed=False):
+    def create_contract(self, session, current_user, client_id, total_amount, remaining_amount, is_signed=False):
+        """
+        Crée un contrat en récupérant l'ID du client et en utilisant automatiquement
+        l'ID du commercial associé au client. Accessible aux rôles "gestion" et "commercial".
+        """
         self._check_permission(current_user, ["gestion", "commercial"])
+        from app.models.client import Client
+        client = session.query(Client).filter_by(id=client_id).first()
+        if not client:
+            raise Exception("Client introuvable.")
         new_contract = Contract(
-            client_id=client_id,
-            commercial_id=commercial_id,
+            client_id=client.id,
+            commercial_id=client.commercial_id,
             total_amount=total_amount,
             remaining_amount=remaining_amount,
             is_signed=is_signed
@@ -202,3 +191,30 @@ class DataWriter:
                 setattr(event, field, value)
         session.commit()
         return event
+
+
+class DataReader:
+    def __init__(self, db_connection):
+        self.db_connection = db_connection
+
+    def _check_auth(self, current_user):
+        if not current_user:
+            raise Exception("Utilisateur non authentifié.")
+        return True
+
+    def get_all_clients(self, session, current_user):
+        self._check_auth(current_user)
+        from app.models.client import Client
+        return session.query(Client).all()
+
+    def get_all_contracts(self, session, current_user):
+        self._check_auth(current_user)
+        from app.models.contract import Contract
+        return session.query(Contract).all()
+
+    def get_all_events(self, session, current_user):
+        self._check_auth(current_user)
+        from app.models.event import Event
+        if current_user["role"] == "support":
+            return session.query(Event).filter(Event.support_id == current_user["id"]).all()
+        return session.query(Event).all()

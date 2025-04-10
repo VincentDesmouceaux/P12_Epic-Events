@@ -14,7 +14,7 @@ class DatabaseConfig:
     """
 
     def __init__(self):
-        self.db_engine = os.getenv("DB_ENGINE")  # par ex.: mysql+pymysql
+        self.db_engine = os.getenv("DB_ENGINE")            # ex: mysql+pymysql
         self.db_user = os.getenv("DB_USER")
         self.db_password = os.getenv("DB_PASSWORD")
         self.db_host = os.getenv("DB_HOST")
@@ -29,7 +29,7 @@ class DatabaseConfig:
 
 class DatabaseConnection:
     """
-    Classe gérant la connexion à la base de données via SQLAlchemy.
+    Gère la connexion à la base via SQLAlchemy.
     """
 
     def __init__(self, config: DatabaseConfig):
