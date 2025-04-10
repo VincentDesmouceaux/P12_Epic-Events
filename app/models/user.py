@@ -1,3 +1,4 @@
+# app/models/user.py
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from app.models.base import Base
@@ -18,5 +19,6 @@ class User(Base):
     email = Column(String(150), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
 
+    # Chargement immédiat (joined) du rôle pour éviter une LazyLoad après fermeture de la session.
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
-    role = relationship("Role", backref="users")
+    role = relationship("Role", backref="users", lazy='joined')

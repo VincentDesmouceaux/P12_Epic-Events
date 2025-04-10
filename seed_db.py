@@ -16,10 +16,12 @@ def seed_db():
     """
     Cette fonction insère des données d'exemple dans la base de données.
     Les actions effectuées sont :
-      - Insertion (si non existante) des rôles : commercial, support, gestion.
-      - Insertion d'exemples d'utilisateurs pour chaque département (les mots de passe sont hachés via AuthController).
-      - Insertion de plusieurs clients, contrats et événements d'exemple.
-    Note : Ce script ne vide pas la base afin de ne pas supprimer un schéma déjà initialisé.
+      - Insérer (si non existant) les rôles : commercial, support, gestion.
+      - Insérer des utilisateurs exemples pour chaque département, avec des mots de passe hachés.
+      - Insérer plusieurs clients, contrats et événements.
+      - Si la donnée existe déjà (identifiée par un email ou autre identifiant unique),
+        elle n'est pas réinsérée.
+    Note : Ce script ne vide pas la base.
     """
     # Initialisation de la configuration et de la connexion
     config = DatabaseConfig()
@@ -48,7 +50,7 @@ def seed_db():
             print(f"Role '{role_name}' existe déjà avec ID={role.id}.")
         inserted_roles[role_name] = role
 
-    # Instanciation d'AuthController pour le hachage des mots de passe
+    # Instanciation d'AuthController pour hacher les mots de passe
     auth_controller = AuthController()
 
     # Insertion d'exemples d'utilisateurs pour chaque département.

@@ -1,11 +1,12 @@
+# tests/testunitaire/test_models.py
 import unittest
 from datetime import datetime
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models import Base
-from app.models.user import User
 from app.models.role import Role
+from app.models.user import User
 from app.models.client import Client
 from app.models.contract import Contract
 from app.models.event import Event
@@ -13,18 +14,16 @@ from app.models.event import Event
 
 class TestModels(unittest.TestCase):
     """
-    Tests unitaires pour vérifier la création des modèles et leurs relations.
+    Tests pour vérifier la création des modèles et leurs relations.
     """
 
     def setUp(self):
-        # Utiliser une base de données SQLite en mémoire pour les tests
         self.engine = create_engine('sqlite:///:memory:', echo=False)
-        # Créer toutes les tables (toutes les classes doivent être importées pour être enregistrées)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
         self.session = self.Session()
 
-        # Insérer un rôle de test pour les utilisateurs
+        # Insertion d'un rôle de test
         self.test_role = Role(name="commercial", description="Test Role")
         self.session.add(self.test_role)
         self.session.commit()
@@ -124,7 +123,6 @@ class TestModels(unittest.TestCase):
             last_name="Lefevre",
             email="david.lefevre@example.com",
             password_hash="dummyhash",
-            # Pour les tests, on peut utiliser le même rôle ou un autre rôle "support" si défini
             role_id=self.test_role.id
         )
         self.session.add_all([commercial, support])
