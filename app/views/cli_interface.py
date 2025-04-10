@@ -150,14 +150,17 @@ class CLIInterface(GenericView):
             except:
                 self.print_red("ID contrat invalide.")
                 return
+            total_amount_str = input(
+                self.CYAN + "Nouveau montant total : " + self.END)
             remaining_amount_str = input(
                 self.CYAN + "Nouveau montant restant : " + self.END)
             signed_str = input(
                 self.CYAN + "Contrat signé ? (O/N) : " + self.END).strip().upper()
             try:
+                total_amount = float(total_amount_str)
                 remaining_amount = float(remaining_amount_str)
             except:
-                self.print_red("Montant invalide.")
+                self.print_red("Montants invalides.")
                 return
             is_signed = True if signed_str == "O" else False
             session = self.db_connection.create_session()
@@ -166,11 +169,12 @@ class CLIInterface(GenericView):
                     session,
                     self.current_user,
                     contract_id,
+                    total_amount=total_amount,
                     remaining_amount=remaining_amount,
                     is_signed=is_signed
                 )
-                self.print_green(
-                    "Contrat mis à jour, montant restant = " + str(updated_contract.remaining_amount))
+                self.print_green("Contrat mis à jour, montant total = " + str(updated_contract.total_amount) +
+                                 ", montant restant = " + str(updated_contract.remaining_amount))
             except Exception as e:
                 self.print_red(
                     "Erreur lors de la modification du contrat : " + str(e))
@@ -214,23 +218,30 @@ class CLIInterface(GenericView):
             except:
                 self.print_red("ID invalide.")
                 return
-            support_id_str = input(
-                self.CYAN + "ID du collaborateur support à assigner : " + self.END)
-            try:
-                support_id = int(support_id_str)
-            except:
-                self.print_red("ID support invalide.")
+            # Demander l'employee_number du collaborateur support
+            emp_number = input(
+                self.CYAN + "Employee Number du collaborateur support à assigner : " + self.END).strip()
+            if not emp_number:
+                self.print_red("Employee Number invalide.")
                 return
             session = self.db_connection.create_session()
             try:
+                from app.models.user import User
+                support_user = session.query(User).filter_by(
+                    employee_number=emp_number).first()
+                if not support_user:
+                    self.print_red(
+                        "Aucun collaborateur trouvé avec cet employee_number.")
+                    session.close()
+                    return
                 updated_event = self.writer_view.writer.update_event(
                     session,
                     self.current_user,
                     event_id,
-                    support_id=support_id
+                    support_id=support_user.id
                 )
                 self.print_green(
-                    "Événement mis à jour, support assigné = " + str(updated_event.support_id))
+                    "Événement mis à jour, support assigné = " + support_user.employee_number)
             except Exception as e:
                 self.print_red(
                     "Erreur lors de la modification de l'événement : " + str(e))
