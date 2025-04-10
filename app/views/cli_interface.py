@@ -7,26 +7,17 @@ from app.views.data_writer_view import DataWriterView
 
 class CLIInterface:
     """
-    Interface CLI (menu interactif) sans décorateurs,
-    réutilisant LoginView, DataReaderView et DataWriterView 
-    pour éviter toute duplication de code.
+    Interface CLI réutilisant LoginView, DataReaderView et DataWriterView.
     """
 
     def __init__(self, db_connection):
         self.db_connection = db_connection
-        # Instancier nos vues existantes
         self.login_view = LoginView(db_connection)
         self.reader_view = DataReaderView(db_connection)
         self.writer_view = DataWriterView(db_connection)
-
-        # Pour conserver la notion d'utilisateur courant (après login)
-        # On pourra stocker un simple dict, ex: {"id": 1, "role": "commercial"}
         self.current_user = None
 
     def run(self):
-        """
-        Affiche un menu interactif en boucle (comme l'ancien menu).
-        """
         while True:
             print("\n======== Epic Events CLI ========")
             print("[1] Se connecter (login)")
@@ -34,7 +25,6 @@ class CLIInterface:
             print("[3] Création / mise à jour (DataWriter)")
             print("[4] Quitter")
             choice = input("Choix : ").strip()
-
             if choice == "1":
                 self.menu_login()
             elif choice == "2":
@@ -47,26 +37,11 @@ class CLIInterface:
             else:
                 print("Option invalide.")
 
-    # ---------------------------------------------------------------------
-    # Méthodes de menu intermédiaires
-    # ---------------------------------------------------------------------
-
     def menu_login(self):
-        """
-        Sous-menu / action : se connecter.
-        On appelle la vue LoginView. 
-        """
         email = input("Email : ")
         password = input("Mot de passe : ")
-
-        # On fait comme si on reprenait la logique de login sans tout dupliquer.
-        # On peut créer une méthode "login_with_credentials" dans LoginView
-        # pour éviter la duplication d'input() qu'elle fait déjà.
         user = self.login_view.login_with_credentials_return_user(
             email, password)
-        # => On modifie légèrement LoginView pour qu'elle retourne l'user
-        #    au lieu d'imprimer "Authentification réussie" etc.
-
         if user:
             self.current_user = {"id": user.id, "role": user.role.name}
             print(f"Authentification réussie. Rôle={user.role.name}")
@@ -74,14 +49,9 @@ class CLIInterface:
             print("Échec de l'authentification.")
 
     def menu_data_reader(self):
-        """
-        Sous-menu lecture (clients, contrats, events).
-        On suppose que l'utilisateur doit être authentifié.
-        """
         if not self.current_user:
             print("Veuillez vous connecter d'abord.")
             return
-
         while True:
             print("\n-- Lecture des données --")
             print("[1] Lister les clients")
@@ -89,7 +59,6 @@ class CLIInterface:
             print("[3] Lister les événements")
             print("[4] Retour menu principal")
             c = input("Choix : ").strip()
-
             if c == "1":
                 self.reader_view.display_clients_only(self.current_user)
             elif c == "2":
@@ -102,15 +71,9 @@ class CLIInterface:
                 print("Option invalide.")
 
     def menu_data_writer(self):
-        """
-        Sous-menu pour créer / modifier (users, clients, contrats, events).
-        On suppose que l'utilisateur doit être authentifié et en général "gestion" 
-        ou "commercial" etc.
-        """
         if not self.current_user:
             print("Veuillez vous connecter d'abord.")
             return
-
         while True:
             print("\n-- Création / Mise à jour --")
             print("[1] Créer un user (collaborateur)")
@@ -118,7 +81,6 @@ class CLIInterface:
             print("[3] (Autres actions : créer client, contrat, etc.)")
             print("[4] Retour menu principal")
             c = input("Choix : ").strip()
-
             if c == "1":
                 self.menu_create_user()
             elif c == "2":
@@ -130,20 +92,10 @@ class CLIInterface:
             else:
                 print("Option invalide.")
 
-    # ---------------------------------------------------------------------
-    # Méthodes d'action DataWriter (création/mise à jour)
-    # ---------------------------------------------------------------------
-
     def menu_create_user(self):
-        """
-        Crée un nouvel utilisateur (collaborateur) via DataWriterView
-        (qui appelle DataWriter).
-        On suppose que self.current_user est "gestion".
-        """
         if self.current_user["role"] != "gestion":
             print("Seul un utilisateur 'gestion' peut créer un user.")
             return
-
         empnum = input("Numéro employé : ")
         fname = input("Prénom : ")
         lname = input("Nom : ")
@@ -155,7 +107,6 @@ class CLIInterface:
         except ValueError:
             print("Role ID invalide.")
             return
-
         self.writer_view.create_user_cli(
             current_user=self.current_user,
             empnum=empnum,
@@ -167,24 +118,18 @@ class CLIInterface:
         )
 
     def menu_update_user(self):
-        """
-        Met à jour un collaborateur existant.
-        """
         if self.current_user["role"] != "gestion":
             print("Seul 'gestion' peut update un user.")
             return
-
         user_id_str = input("ID du user à modifier : ")
         try:
             user_id = int(user_id_str)
         except ValueError:
             print("User ID invalide.")
             return
-
         fname = input("Nouveau prénom (laisser vide si inchangé) : ")
         lname = input("Nouveau nom (laisser vide si inchangé) : ")
         email = input("Nouvel email (laisser vide si inchangé) : ")
-
         updates = {}
         if fname.strip():
             updates["first_name"] = fname
@@ -192,5 +137,4 @@ class CLIInterface:
             updates["last_name"] = lname
         if email.strip():
             updates["email"] = email
-
         self.writer_view.update_user_cli(self.current_user, user_id, **updates)

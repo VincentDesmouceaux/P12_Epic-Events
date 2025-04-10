@@ -1,12 +1,14 @@
 # app/views/data_reader_view.py
 
 from app.controllers.data_reader import DataReader
+from app.views.generic_entity_view import GenericEntityView
 
 
-class DataReaderView:
+class DataReaderView(GenericEntityView):
     """
     Vue pour l'affichage des données de l'application CRM.
-    Utilise DataReader pour récupérer et afficher les données.
+    Elle utilise un contrôleur DataReader pour récupérer les données
+    et hérite de GenericEntityView pour formatter l'affichage.
     """
 
     def __init__(self, db_connection):
@@ -15,29 +17,32 @@ class DataReaderView:
 
     def display_data_full(self, current_user):
         """
-        Méthode existante (interactive) : liste clients, contrats, events ensemble.
+        Affiche en détail (avec toutes les clés) tous les clients, contrats et événements.
         """
         session = self.db_conn.create_session()
         try:
             clients = self.reader.get_all_clients(session, current_user)
             contracts = self.reader.get_all_contracts(session, current_user)
             events = self.reader.get_all_events(session, current_user)
-            print("Nombre de clients :", len(clients))
-            print("Nombre de contrats :", len(contracts))
-            print("Nombre d'événements :", len(events))
+            print("=== Clients ===")
+            for client in clients:
+                print("  ", self.format_entity(client))
+            print("\n=== Contrats ===")
+            for contract in contracts:
+                print("  ", self.format_entity(contract))
+            print("\n=== Événements ===")
+            for event in events:
+                print("  ", self.format_entity(event))
         finally:
             session.close()
 
     def display_clients_only(self, current_user):
-        """
-        Liste uniquement les clients, sans input().
-        """
         session = self.db_conn.create_session()
         try:
             clients = self.reader.get_all_clients(session, current_user)
             print(f"{len(clients)} clients :")
-            for c in clients:
-                print(f"  ID={c.id}, FullName={c.full_name}, Email={c.email}")
+            for client in clients:
+                print("  ", self.format_entity(client))
         finally:
             session.close()
 
@@ -46,10 +51,8 @@ class DataReaderView:
         try:
             contracts = self.reader.get_all_contracts(session, current_user)
             print(f"{len(contracts)} contrats :")
-            for ctr in contracts:
-                status = "Signé" if ctr.is_signed else "Non signé"
-                print(
-                    f"  ID={ctr.id}, total={ctr.total_amount}, remaining={ctr.remaining_amount}, {status}")
+            for contract in contracts:
+                print("  ", self.format_entity(contract))
         finally:
             session.close()
 
@@ -58,8 +61,7 @@ class DataReaderView:
         try:
             events = self.reader.get_all_events(session, current_user)
             print(f"{len(events)} événements :")
-            for e in events:
-                print(
-                    f"  ID={e.id}, Contrat={e.contract_id}, Support={e.support_id}, Attendees={e.attendees}")
+            for event in events:
+                print("  ", self.format_entity(event))
         finally:
             session.close()
