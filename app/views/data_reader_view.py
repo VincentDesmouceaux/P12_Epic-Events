@@ -7,8 +7,8 @@ from app.views.generic_entity_view import GenericEntityView
 class DataReaderView(GenericEntityView):
     """
     Vue pour l'affichage des données de l'application CRM.
-    Elle utilise un contrôleur DataReader pour récupérer les données
-    et hérite de GenericEntityView pour formatter l'affichage.
+    Utilise DataReader pour récupérer les données et formate l'affichage
+    via la méthode format_entity héritée de GenericEntityView.
     """
 
     def __init__(self, db_connection):
@@ -16,9 +16,6 @@ class DataReaderView(GenericEntityView):
         self.reader = DataReader(self.db_conn)
 
     def display_data_full(self, current_user):
-        """
-        Affiche en détail (avec toutes les clés) tous les clients, contrats et événements.
-        """
         session = self.db_conn.create_session()
         try:
             clients = self.reader.get_all_clients(session, current_user)
@@ -26,13 +23,13 @@ class DataReaderView(GenericEntityView):
             events = self.reader.get_all_events(session, current_user)
             print("=== Clients ===")
             for client in clients:
-                print("  ", self.format_entity(client))
+                print("  " + self.format_entity(client))
             print("\n=== Contrats ===")
             for contract in contracts:
-                print("  ", self.format_entity(contract))
+                print("  " + self.format_entity(contract))
             print("\n=== Événements ===")
             for event in events:
-                print("  ", self.format_entity(event))
+                print("  " + self.format_entity(event))
         finally:
             session.close()
 
@@ -42,7 +39,7 @@ class DataReaderView(GenericEntityView):
             clients = self.reader.get_all_clients(session, current_user)
             print(f"{len(clients)} clients :")
             for client in clients:
-                print("  ", self.format_entity(client))
+                print("  " + self.format_entity(client))
         finally:
             session.close()
 
@@ -52,7 +49,7 @@ class DataReaderView(GenericEntityView):
             contracts = self.reader.get_all_contracts(session, current_user)
             print(f"{len(contracts)} contrats :")
             for contract in contracts:
-                print("  ", self.format_entity(contract))
+                print("  " + self.format_entity(contract))
         finally:
             session.close()
 
@@ -62,6 +59,6 @@ class DataReaderView(GenericEntityView):
             events = self.reader.get_all_events(session, current_user)
             print(f"{len(events)} événements :")
             for event in events:
-                print("  ", self.format_entity(event))
+                print("  " + self.format_entity(event))
         finally:
             session.close()
