@@ -8,6 +8,7 @@ from app.views.data_writer_view import DataWriterView
 class CLIInterface(GenericView):
     """
     Interface CLI interactive regroupant LoginView, DataReaderView et DataWriterView.
+    Hérite de GenericView pour l'affichage coloré.
     """
 
     def __init__(self, db_connection):
@@ -50,7 +51,9 @@ class CLIInterface(GenericView):
         user = self.login_view.login_with_credentials_return_user(
             email, password)
         if user:
-            self.current_user = {"id": user.id, "role": user.role.name}
+            # Assurez-vous que le dummy login en test retourne un rôle avec un id
+            self.current_user = {
+                "id": user.id, "role": user.role.name, "role_id": getattr(user.role, "id", 3)}
             self.print_green(
                 f"Authentification réussie. Rôle = {user.role.name}")
         else:
@@ -65,7 +68,7 @@ class CLIInterface(GenericView):
             print(self.BLUE + "[1] Lister les clients" + self.END)
             print(self.BLUE + "[2] Lister les contrats" + self.END)
             print(self.BLUE + "[3] Lister les événements" + self.END)
-            print(self.BLUE + "[4] Retour" + self.END)
+            print(self.BLUE + "[4] Retour menu principal" + self.END)
             c = input(self.CYAN + "Choix : " + self.END).strip()
             if c == "1":
                 self.reader_view.display_clients_only(self.current_user)
@@ -85,202 +88,96 @@ class CLIInterface(GenericView):
         while True:
             self.print_header(
                 "\n-- Gestion des collaborateurs / contrats / événements --")
-            print(self.BLUE + "[1] Gérer les collaborateurs" + self.END)
-            print(self.BLUE + "[2] Gérer les contrats" + self.END)
-            print(self.BLUE + "[3] Gérer les événements" + self.END)
-            print(self.BLUE + "[4] Retour" + self.END)
+            print(
+                self.BLUE + "[1] Créer / Modifier / Supprimer un collaborateur" + self.END)
+            print(self.BLUE + "[2] Créer / Modifier un contrat" + self.END)
+            print(
+                self.BLUE + "[3] Consulter / Modifier un événement (assigner support)" + self.END)
+            print(self.BLUE + "[4] Retour menu principal" + self.END)
             c = input(self.CYAN + "Choix : " + self.END).strip()
             if c == "1":
-                self.menu_manage_users()
+                self.menu_collaborator()
             elif c == "2":
-                self.menu_manage_contracts()
+                self.menu_contract()
             elif c == "3":
-                self.menu_manage_events()
+                self.menu_event()
             elif c == "4":
                 break
             else:
                 self.print_red("Option invalide.")
 
-    def menu_manage_users(self):
+    def menu_collaborator(self):
         self.print_header("\n-- Gestion des collaborateurs --")
         print(self.BLUE + "[1] Créer un collaborateur" + self.END)
-        print(self.BLUE +
-              "[2] Modifier un collaborateur (par employee_number)" + self.END)
-        print(
-            self.BLUE + "[3] Supprimer un collaborateur (par employee_number)" + self.END)
+        print(self.BLUE + "[2] Modifier un collaborateur" + self.END)
+        print(self.BLUE + "[3] Supprimer un collaborateur" + self.END)
         print(self.BLUE + "[4] Retour" + self.END)
         choice = input(self.CYAN + "Choix : " + self.END).strip()
         if choice == "1":
-            self.menu_create_user()
+            # Création : le numéro est généré automatiquement
+            fname = input(self.CYAN + "Prénom : " + self.END)
+            lname = input(self.CYAN + "Nom : " + self.END)
+            email = input(self.CYAN + "Email : " + self.END)
+            password = input(self.CYAN + "Mot de passe : " + self.END)
+            role_id_str = input(
+                self.CYAN + "ID du rôle (1=commercial, 2=support, 3=gestion) : " + self.END)
+            try:
+                role_id = int(role_id_str)
+            except ValueError:
+                self.print_red("Role ID invalide.")
+                return
+            self.current_user["role_id"] = role_id  # Mémoriser le rôle choisi
+            self.writer_view.create_user_cli(
+                self.current_user, fname, lname, email, password)
         elif choice == "2":
-            self.menu_update_user()
+            emp_num = input(
+                self.CYAN + "Employee Number du collaborateur à modifier : " + self.END)
+            fname = input(
+                self.CYAN + "Nouveau prénom (laisser vide si inchangé) : " + self.END)
+            lname = input(
+                self.CYAN + "Nouveau nom (laisser vide si inchangé) : " + self.END)
+            email = input(
+                self.CYAN + "Nouvel email (laisser vide si inchangé) : " + self.END)
+            updates = {}
+            if fname.strip():
+                updates["first_name"] = fname
+            if lname.strip():
+                updates["last_name"] = lname
+            if email.strip():
+                updates["email"] = email
+            self.writer_view.update_user_cli(
+                self.current_user, emp_num, **updates)
         elif choice == "3":
-            self.menu_delete_user()
+            emp_num = input(
+                self.CYAN + "Employee Number du collaborateur à supprimer : " + self.END)
+            session = self.db_connection.create_session()
+            try:
+                result = self.writer_view.writer.delete_user(
+                    session, self.current_user, emp_num)
+                if result:
+                    self.print_green("Collaborateur supprimé avec succès.")
+            except Exception as e:
+                self.print_red("Erreur lors de la suppression : " + str(e))
+                session.rollback()
+            finally:
+                session.close()
         elif choice == "4":
             return
-        else:
-            self.print_red("Option invalide.")
 
-    def menu_create_user(self):
-        if self.current_user["role"] != "gestion":
-            self.print_red(
-                "Seul un utilisateur 'gestion' peut créer un collaborateur.")
-            return
-        self.print_header("\n-- Création d'un collaborateur --")
-        # Le numéro d'employé est généré automatiquement
-        fname = input(self.CYAN + "Prénom : " + self.END)
-        lname = input(self.CYAN + "Nom : " + self.END)
-        email = input(self.CYAN + "Email : " + self.END)
-        password = input(self.CYAN + "Mot de passe : " + self.END)
-        role_id_str = input(
-            self.CYAN + "ID du rôle (ex. 3 pour gestion) : " + self.END)
-        try:
-            role_id = int(role_id_str)
-        except ValueError:
-            self.print_red("Role ID invalide.")
-            return
-        self.writer_view.create_user_cli(
-            current_user=self.current_user,
-            fname=fname,
-            lname=lname,
-            email=email,
-            password=password,
-            role_id=role_id
-        )
-
-    def menu_update_user(self):
-        if self.current_user["role"] != "gestion":
-            self.print_red("Seul 'gestion' peut modifier un collaborateur.")
-            return
-        self.print_header("\n-- Modification d'un collaborateur --")
-        emp_num = input(
-            self.CYAN + "Employee Number du collaborateur à modifier : " + self.END)
-        fname = input(
-            self.CYAN + "Nouveau prénom (laisser vide si inchangé) : " + self.END)
-        lname = input(
-            self.CYAN + "Nouveau nom (laisser vide si inchangé) : " + self.END)
-        email = input(
-            self.CYAN + "Nouvel email (laisser vide si inchangé) : " + self.END)
-        updates = {}
-        if fname.strip():
-            updates["first_name"] = fname
-        if lname.strip():
-            updates["last_name"] = lname
-        if email.strip():
-            updates["email"] = email
-        self.writer_view.update_user_cli(self.current_user, emp_num, **updates)
-
-    def menu_delete_user(self):
-        if self.current_user["role"] != "gestion":
-            self.print_red("Seul 'gestion' peut supprimer un collaborateur.")
-            return
-        self.print_header("\n-- Suppression d'un collaborateur --")
-        emp_num = input(
-            self.CYAN + "Employee Number du collaborateur à supprimer : " + self.END)
-        self.writer_view.delete_user_cli(self.current_user, emp_num)
-
-    def menu_manage_contracts(self):
+    def menu_contract(self):
         self.print_header("\n-- Gestion des contrats --")
-        print(self.BLUE + "[1] Créer un contrat" + self.END)
-        print(self.BLUE + "[2] Modifier un contrat" + self.END)
-        print(self.BLUE + "[3] Retour" + self.END)
-        choice = input(self.CYAN + "Choix : " + self.END).strip()
-        if choice == "1":
-            self.menu_create_contract()
-        elif choice == "2":
-            self.menu_update_contract()
-        elif choice == "3":
-            return
-        else:
-            self.print_red("Option invalide.")
+        self.print_yellow("Fonctionnalité à implémenter.")
+        input(self.CYAN + "Appuyez sur Entrée pour revenir." + self.END)
 
-    def menu_create_contract(self):
-        self.print_header("\n-- Création d'un contrat --")
-        client_id_str = input(self.CYAN + "ID du client : " + self.END)
-        try:
-            client_id = int(client_id_str)
-        except ValueError:
-            self.print_red("Client ID invalide.")
-            return
-        commercial_id_str = input(self.CYAN + "ID du commercial : " + self.END)
-        try:
-            commercial_id = int(commercial_id_str)
-        except ValueError:
-            self.print_red("Commercial ID invalide.")
-            return
-        total_amount_str = input(self.CYAN + "Montant total : " + self.END)
-        try:
-            total_amount = float(total_amount_str)
-        except ValueError:
-            self.print_red("Montant invalide.")
-            return
-        remaining_amount_str = input(
-            self.CYAN + "Montant restant : " + self.END)
-        try:
-            remaining_amount = float(remaining_amount_str)
-        except ValueError:
-            self.print_red("Montant restant invalide.")
-            return
-        is_signed_str = input(
-            self.CYAN + "Contrat signé ? (oui/non) : " + self.END).strip().lower()
-        is_signed = True if is_signed_str in (
-            "oui", "o", "yes", "y") else False
-        self.writer_view.create_contract_cli(
-            self.current_user, client_id, commercial_id, total_amount, remaining_amount, is_signed)
-
-    def menu_update_contract(self):
-        self.print_header("\n-- Modification d'un contrat --")
-        contract_id_str = input(
-            self.CYAN + "ID du contrat à modifier : " + self.END)
-        try:
-            contract_id = int(contract_id_str)
-        except ValueError:
-            self.print_red("Contract ID invalide.")
-            return
-        remaining_amount_str = input(
-            self.CYAN + "Nouveau montant restant : " + self.END)
-        try:
-            remaining_amount = float(remaining_amount_str)
-        except ValueError:
-            self.print_red("Montant restant invalide.")
-            return
-        is_signed_str = input(
-            self.CYAN + "Contrat signé ? (oui/non) : " + self.END).strip().lower()
-        is_signed = True if is_signed_str in (
-            "oui", "o", "yes", "y") else False
-        self.writer_view.update_contract_cli(
-            self.current_user, contract_id, remaining_amount=remaining_amount, is_signed=is_signed)
-
-    def menu_manage_events(self):
+    def menu_event(self):
         self.print_header("\n-- Gestion des événements --")
-        print(self.BLUE + "[1] Consulter les événements" + self.END)
-        print(self.BLUE +
-              "[2] Modifier un événement pour assigner un support" + self.END)
-        print(self.BLUE + "[3] Retour" + self.END)
-        choice = input(self.CYAN + "Choix : " + self.END).strip()
-        if choice == "1":
-            self.reader_view.display_events_only(self.current_user)
-        elif choice == "2":
-            self.menu_update_event_for_support()
-        elif choice == "3":
-            return
-        else:
-            self.print_red("Option invalide.")
+        self.print_yellow("Fonctionnalité à implémenter.")
+        input(self.CYAN + "Appuyez sur Entrée pour revenir." + self.END)
 
-    def menu_update_event_for_support(self):
-        self.print_header("\n-- Modification d'un événement --")
-        event_id_str = input(self.CYAN + "ID de l'événement : " + self.END)
-        try:
-            event_id = int(event_id_str)
-        except ValueError:
-            self.print_red("Event ID invalide.")
-            return
-        support_id_str = input(
-            self.CYAN + "ID du collaborateur support à assigner : " + self.END)
-        try:
-            support_id = int(support_id_str)
-        except ValueError:
-            self.print_red("Support ID invalide.")
-            return
-        self.writer_view.update_event_cli(
-            self.current_user, event_id, support_id=support_id)
+
+if __name__ == "__main__":
+    from app.config.database import DatabaseConfig, DatabaseConnection
+    db_config = DatabaseConfig()
+    db_connection = DatabaseConnection(db_config)
+    cli = CLIInterface(db_connection)
+    cli.run()

@@ -7,7 +7,8 @@ from app.authentification.auth_controller import AuthController
 
 class DataWriterView(GenericView):
     """
-    Vue pour la gestion (création, mise à jour, suppression) des données (collaborateurs, contrats, événements).
+    Vue pour la création, mise à jour et suppression des données dans l'application CRM.
+    Utilise le contrôleur DataWriter.
     """
 
     def __init__(self, db_connection):
@@ -17,24 +18,28 @@ class DataWriterView(GenericView):
         self.auth_controller = AuthController()
 
     def run(self):
+        """
+        Version interactive de démonstration pour un utilisateur "gestion".
+        """
         session = self.db_conn.create_session()
-        current_user = {"id": 1, "role": "gestion"}
+        # On suppose que current_user est "gestion", rôle gestion = 3
+        current_user = {"id": 1, "role": "gestion", "role_id": 3}
 
         self.print_header("\n[DEBUG] DataWriterView.run() - START")
         self.print_yellow("[DEBUG] current_user = " + str(current_user))
 
+        # Création d'un collaborateur (auto-génération du numéro)
+        self.print_cyan("Création d'un collaborateur...")
         try:
-            # Pour "gestion", on ne fournit pas de numéro d'employé pour que celui-ci soit auto-généré
             new_user = self.writer.create_user(
                 session,
                 current_user,
+                employee_number=None,  # Laisser None pour l'auto-génération
                 first_name="Jean",
                 last_name="Dupont",
                 email="jean.dupont@example.com",
-                # En production, ce sera le hash d'un mot de passe saisi
-                password_hash="hashed_value",
-                role_id=2,
-                employee_number=None
+                password_hash="hashed_value",  # En prod, ce doit être un mot de passe haché
+                role_id=current_user.get("role_id", 3)
             )
             self.print_green("[DEBUG] new_user = " + str(new_user))
             if new_user:
@@ -65,7 +70,7 @@ class DataWriterView(GenericView):
             new_contract = self.writer.create_contract(
                 session,
                 current_user,
-                client_id=1,
+                client_id=1,  # Exemple d'ID client
                 commercial_id=new_user.id,
                 total_amount=10000.0,
                 remaining_amount=5000.0,
@@ -98,7 +103,7 @@ class DataWriterView(GenericView):
                 session,
                 current_user,
                 contract_id=new_contract.id,
-                support_id=3,
+                support_id=3,  # Exemple d'ID pour un support
                 date_start=datetime(2023, 6, 4, 13, 0),
                 date_end=datetime(2023, 6, 5, 2, 0),
                 location="53 Rue du Château, 41120 Candé-sur-Beuvron, France",
@@ -131,28 +136,31 @@ class DataWriterView(GenericView):
         session.close()
         self.print_header("[DEBUG] DataWriterView.run() - END\n")
 
-    def create_user_cli(self, current_user, fname, lname, email, password, role_id):
+    def create_user_cli(self, current_user, fname, lname, email, password):
         """
-        Crée un collaborateur. Le numéro d'employé est auto-généré pour la gestion.
-        Le mot de passe est saisi en clair et haché automatiquement.
+        Crée un collaborateur via DataWriter.
+        Le numéro d'employé est auto-généré.
         """
         session = self.db_conn.create_session()
         try:
+            # Hachage du mot de passe saisi en clair
             hashed_password = self.auth_controller.hasher.hash(password)
+            # Utilise le rôle de current_user pour auto-générer le numéro
             user = self.writer.create_user(
                 session,
                 current_user,
+                employee_number=None,
                 first_name=fname,
                 last_name=lname,
                 email=email,
                 password_hash=hashed_password,
-                role_id=role_id,
-                employee_number=None  # Auto-généré
+                role_id=current_user.get("role_id", 3)
             )
             self.print_green(
-                f"Collaborateur créé : Employee Number = {user.employee_number}")
+                "Collaborateur créé : Employee Number = " + user.employee_number)
         except Exception as e:
-            self.print_red(f"Erreur lors de la création du collaborateur: {e}")
+            self.print_red(
+                "Erreur lors de la création du collaborateur: " + str(e))
             session.rollback()
         finally:
             session.close()
@@ -172,75 +180,7 @@ class DataWriterView(GenericView):
             self.print_green(
                 f"Collaborateur {updated.employee_number} mis à jour.")
         except Exception as e:
-            self.print_red(
-                f"Erreur lors de la mise à jour du collaborateur: {e}")
-            session.rollback()
-        finally:
-            session.close()
-
-    def delete_user_cli(self, current_user, employee_number):
-        """
-        Supprime un collaborateur identifié par son employee_number.
-        """
-        session = self.db_conn.create_session()
-        try:
-            self.writer.delete_user(session, current_user, employee_number)
-            self.print_green(f"Collaborateur {employee_number} supprimé.")
-        except Exception as e:
-            self.print_red(
-                f"Erreur lors de la suppression du collaborateur: {e}")
-            session.rollback()
-        finally:
-            session.close()
-
-    def create_contract_cli(self, current_user, client_id, commercial_id, total_amount, remaining_amount, is_signed):
-        session = self.db_conn.create_session()
-        try:
-            contract = self.writer.create_contract(
-                session,
-                current_user,
-                client_id,
-                commercial_id,
-                total_amount,
-                remaining_amount,
-                is_signed
-            )
-            self.print_green(f"Contrat créé : ID = {contract.id}")
-        except Exception as e:
-            self.print_red(f"Erreur lors de la création du contrat: {e}")
-            session.rollback()
-        finally:
-            session.close()
-
-    def update_contract_cli(self, current_user, contract_id, **updates):
-        session = self.db_conn.create_session()
-        try:
-            contract = self.writer.update_contract(
-                session,
-                current_user,
-                contract_id,
-                **updates
-            )
-            self.print_green(f"Contrat {contract.id} mis à jour.")
-        except Exception as e:
-            self.print_red(f"Erreur lors de la mise à jour du contrat: {e}")
-            session.rollback()
-        finally:
-            session.close()
-
-    def update_event_cli(self, current_user, event_id, **updates):
-        session = self.db_conn.create_session()
-        try:
-            event = self.writer.update_event(
-                session,
-                current_user,
-                event_id,
-                **updates
-            )
-            self.print_green(f"Événement {event.id} mis à jour.")
-        except Exception as e:
-            self.print_red(
-                f"Erreur lors de la mise à jour de l'événement: {e}")
+            self.print_red("Erreur lors de la mise à jour: " + str(e))
             session.rollback()
         finally:
             session.close()

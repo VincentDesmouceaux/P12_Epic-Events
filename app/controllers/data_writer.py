@@ -8,7 +8,8 @@ from sqlalchemy import func
 
 class DataWriter:
     """
-    Contrôleur pour la création, la mise à jour et la suppression des données.
+    Classe responsable de la création, mise à jour et suppression des données
+    dans la base. Les actions sont contrôlées par le rôle de l'utilisateur.
     """
 
     def __init__(self, db_connection):
@@ -23,31 +24,42 @@ class DataWriter:
         if current_user.get("role") not in allowed_roles:
             raise Exception("Permission refusée pour cet utilisateur.")
 
-    def get_next_employee_number(self, session, role_initial):
-        """
-        Retourne le prochain numéro d'employé pour une initiale donnée.
-        Ex : pour "G", si le dernier est "G001", retourne "G002".
-        """
-        prefix = role_initial.upper()
-        max_num = session.query(func.max(func.substr(User.employee_number, len(prefix)+1, 3)))\
-            .filter(User.employee_number.like(f"{prefix}%")).scalar()
-        if max_num is None:
-            next_num = 1
+    def _get_prefix_for_role(self, role_id):
+        if role_id == 1:
+            return "C"
+        elif role_id == 2:
+            return "S"
+        elif role_id == 3:
+            return "G"
         else:
-            try:
-                next_num = int(max_num) + 1
-            except ValueError:
-                next_num = 1
-        return f"{prefix}{next_num:03d}"
+            return "X"
 
-    def create_user(self, session, current_user, first_name, last_name, email, password_hash, role_id, employee_number=None):
+    def _generate_employee_number(self, session, role_id):
+        prefix = self._get_prefix_for_role(role_id)
+        # Récupère le maximum numérique parmi les employee_number du rôle donné
+        max_num = 0
+        results = session.query(User.employee_number).filter(
+            User.role_id == role_id).all()
+        for (emp_num,) in results:
+            if emp_num and emp_num.startswith(prefix):
+                try:
+                    num = int(emp_num[len(prefix):])
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    continue
+        return f"{prefix}{max_num + 1:03d}"
+
+    # --- Collaborateur ---
+    def create_user(self, session, current_user, employee_number, first_name, last_name, email, password_hash, role_id):
         """
-        Crée un collaborateur. Pour le rôle 'gestion', le numéro d'employé est généré automatiquement.
+        Crée un nouveau collaborateur.
+        Si employee_number est vide, il est auto‑généré.
+        Accessible uniquement aux utilisateurs "gestion".
         """
         self._check_permission(current_user, ["gestion"])
-        if employee_number is None:
-            # Pour la gestion, on utilise l'initiale "G"
-            employee_number = self.get_next_employee_number(session, "G")
+        if not employee_number:
+            employee_number = self._generate_employee_number(session, role_id)
         new_user = User(
             employee_number=employee_number,
             first_name=first_name,
@@ -59,15 +71,16 @@ class DataWriter:
         session.add(new_user)
         try:
             session.commit()
-            return new_user
         except Exception as e:
             session.rollback()
             raise Exception(
-                "Erreur lors de la création de l'utilisateur: " + str(e))
+                f"Erreur lors de la création de l'utilisateur : {e}")
+        return new_user
 
     def update_user(self, session, current_user, user_id, **kwargs):
         """
         Met à jour un collaborateur identifié par son ID.
+        Accessible uniquement aux utilisateurs "gestion".
         """
         self._check_permission(current_user, ["gestion"])
         user = session.query(User).filter_by(id=user_id).first()
@@ -82,12 +95,14 @@ class DataWriter:
     def update_user_by_employee_number(self, session, current_user, employee_number, **kwargs):
         """
         Met à jour un collaborateur identifié par son employee_number.
+        Accessible uniquement aux utilisateurs "gestion".
         """
         self._check_permission(current_user, ["gestion"])
         user = session.query(User).filter_by(
             employee_number=employee_number).first()
         if not user:
-            raise Exception("Collaborateur non trouvé par employee_number.")
+            raise Exception(
+                "Collaborateur non trouvé avec cet employee_number.")
         for field, value in kwargs.items():
             if hasattr(user, field):
                 setattr(user, field, value)
@@ -97,16 +112,19 @@ class DataWriter:
     def delete_user(self, session, current_user, employee_number):
         """
         Supprime un collaborateur identifié par son employee_number.
+        Accessible uniquement aux utilisateurs "gestion".
         """
         self._check_permission(current_user, ["gestion"])
         user = session.query(User).filter_by(
             employee_number=employee_number).first()
         if not user:
-            raise Exception("Collaborateur non trouvé.")
+            raise Exception(
+                "Collaborateur non trouvé avec cet employee_number.")
         session.delete(user)
         session.commit()
         return True
 
+    # --- Client ---
     def create_client(self, session, current_user, full_name, email, phone, company_name, commercial_id):
         self._check_permission(current_user, ["gestion", "commercial"])
         new_client = Client(
@@ -131,6 +149,7 @@ class DataWriter:
         session.commit()
         return client
 
+    # --- Contrat ---
     def create_contract(self, session, current_user, client_id, commercial_id, total_amount, remaining_amount, is_signed=False):
         self._check_permission(current_user, ["gestion", "commercial"])
         new_contract = Contract(
@@ -155,6 +174,7 @@ class DataWriter:
         session.commit()
         return contract
 
+    # --- Événement ---
     def create_event(self, session, current_user, contract_id, support_id, date_start, date_end, location, attendees, notes):
         self._check_permission(
             current_user, ["gestion", "commercial", "support"])
