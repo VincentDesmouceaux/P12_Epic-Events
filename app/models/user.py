@@ -7,8 +7,6 @@ from app.models.base import Base
 class User(Base):
     """
     Modèle représentant un collaborateur.
-    Chaque utilisateur possède un numéro d'employé, un prénom, un nom,
-    une adresse email, un mot de passe haché et est lié à un rôle.
     """
     __tablename__ = "users"
 
@@ -18,7 +16,5 @@ class User(Base):
     last_name = Column(String(150), nullable=False)
     email = Column(String(150), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-
-    # Chargement immédiat (joined) du rôle pour éviter une LazyLoad après fermeture de la session.
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
     role = relationship("Role", backref="users", lazy='joined')

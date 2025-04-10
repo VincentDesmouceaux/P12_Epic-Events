@@ -1,9 +1,7 @@
 # app/views/generic_entity_view.py
-
 class GenericEntityView:
     """
     Classe de base pour formater l'affichage d'une entité SQLAlchemy.
-    La méthode format_entity parcourt les colonnes et retourne une chaîne de la forme "col=val, col2=val2, ...".
     """
 
     def format_entity(self, entity):

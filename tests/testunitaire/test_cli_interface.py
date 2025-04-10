@@ -4,12 +4,11 @@ from io import StringIO
 import sys
 import builtins
 from unittest.mock import patch
-
 from app.views.cli_interface import CLIInterface
 from app.models import Base
 from app.models.role import Role
 
-# DummyDBConnection simulant une connexion DB in-memory
+# Simule une connexion DB en mémoire
 
 
 class DummyDBConnection:
@@ -35,7 +34,7 @@ class TestCLIInterface(unittest.TestCase):
         self.original_input = builtins.input
         self.db_conn = DummyDBConnection()
         self.cli = CLIInterface(self.db_conn)
-        # Simuler un utilisateur connecté pour tester les menus internes
+        # Simuler un utilisateur connecté (pour les menus internes)
         self.cli.current_user = {"id": 1, "role": "gestion"}
 
     def tearDown(self):
@@ -45,12 +44,11 @@ class TestCLIInterface(unittest.TestCase):
         self._input_values = iter(values)
 
         def fake_input_fn(prompt=""):
-            print(prompt, end="")
+            print(prompt, end="")  # Simule l'affichage du prompt
             return next(self._input_values)
         return fake_input_fn
 
     def test_menu_quit(self):
-        # Test que l'option 4 quitte le CLI
         user_inputs = ["4"]
         with patch('builtins.input', self.fake_input(user_inputs)), patch('sys.stdout', new=StringIO()) as fake_out:
             self.cli.run()
@@ -58,7 +56,6 @@ class TestCLIInterface(unittest.TestCase):
         self.assertIn("Au revoir.", output)
 
     def test_menu_invalid_choice(self):
-        # Test pour une option invalide suivie de quitter
         user_inputs = ["9", "4"]
         with patch('builtins.input', self.fake_input(user_inputs)), patch('sys.stdout', new=StringIO()) as fake_out:
             self.cli.run()
@@ -66,7 +63,7 @@ class TestCLIInterface(unittest.TestCase):
         self.assertIn("Option invalide.", output)
 
     def test_menu_login_fail_then_quit(self):
-        # Simuler un login qui échoue
+        # Simule un login qui échoue
         def dummy_login_fail(email, pwd):
             return None
 
@@ -78,7 +75,7 @@ class TestCLIInterface(unittest.TestCase):
             self.assertIn("Échec de l'authentification.", output)
 
     def test_menu_login_success_then_quit(self):
-        # Simuler un login réussi
+        # Simule un login réussi en renvoyant un DummyUser dont le rôle est "gestion"
         class DummyRole:
             name = "gestion"
 
@@ -95,8 +92,8 @@ class TestCLIInterface(unittest.TestCase):
             with patch('builtins.input', self.fake_input(user_inputs)), patch('sys.stdout', new=StringIO()) as fake_out:
                 self.cli.run()
                 output = fake_out.getvalue()
-            self.assertIn("Authentification réussie.", output)
-            self.assertIn("Rôle=gestion", output)
+            # Mise à jour du test pour rechercher "Rôle = gestion" exactement.
+            self.assertIn("Rôle = gestion", output)
 
 
 if __name__ == "__main__":

@@ -1,14 +1,11 @@
 # app/views/data_reader_view.py
-
 from app.controllers.data_reader import DataReader
 from app.views.generic_entity_view import GenericEntityView
 
 
 class DataReaderView(GenericEntityView):
     """
-    Vue pour l'affichage des données de l'application CRM.
-    Utilise DataReader pour récupérer les données et formate l'affichage
-    via la méthode format_entity héritée de GenericEntityView.
+    Vue pour l'affichage des données.
     """
 
     def __init__(self, db_connection):

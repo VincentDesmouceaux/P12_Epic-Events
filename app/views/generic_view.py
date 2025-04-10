@@ -1,13 +1,10 @@
 # app/views/generic_view.py
-
 class GenericView:
     """
-    Classe générique de vue pour faciliter l'affichage coloré dans le terminal.
-    Fournit des méthodes d'affichage formatté (sans décorateurs).
+    Vue générique pour afficher du texte coloré dans le terminal.
     """
 
     def __init__(self):
-        # Codes ANSI pour les couleurs
         self.HEADER = '\033[95m'
         self.BLUE = '\033[94m'
         self.CYAN = '\033[96m'
