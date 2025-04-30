@@ -1,164 +1,291 @@
-# app/views/data_writer_view.py
+"""
+Vue CLI (écriture) – DataWriterView
+-----------------------------------
+• rôle **gestion**   : tout (collaborateurs, clients, contrats, événements)
+• rôle **commercial**: clients + contrats + création d’événements
+• rôle **support**   : mise à jour des événements qui leur sont attribués
+"""
 
-from app.controllers.data_writer import DataWriter
 from datetime import datetime
+
 from app.views.generic_view import GenericView
+from app.controllers.data_writer import DataWriter
 from app.authentification.auth_controller import AuthController
+from app.models.user import User           # utilisé par assign_support_cli
 
 
 class DataWriterView(GenericView):
+    # ------------------------------------------------------------------ #
+    #  construction
+    # ------------------------------------------------------------------ #
     def __init__(self, db_connection):
         super().__init__()
-        self.db_conn = db_connection
-        self.writer = DataWriter(self.db_conn)
-        self.auth_controller = AuthController()
+        self.db = db_connection
+        self.writer = DataWriter(self.db)
+        self.auth = AuthController()        # pour le hash de mot-de-passe
 
-    def run(self):
-        """
-        Démonstration interactive pour un utilisateur "gestion" :
-        Création d'un collaborateur, mise à jour, puis création
-        d'un contrat et d'un événement.
-        """
-        session = self.db_conn.create_session()
-        current_user = {"id": 1, "role": "gestion", "role_id": 3}
+    # ------------------------------------------------------------------ #
+    #  helpers I/O
+    # ------------------------------------------------------------------ #
+    def _ask(self, label, cast=str, allow_empty=False):
+        while True:
+            val = input(self.CYAN + label + self.END).strip()
+            if not val and allow_empty:
+                return None
+            if not val:
+                self.print_red("Valeur obligatoire.")
+                continue
+            try:
+                return cast(val) if cast else val
+            except ValueError:
+                self.print_red("Format invalide.")
 
-        # 1) Affichage du point de départ
-        self.print_header("\n[DEBUG] DataWriterView.run() - START")
-        self.print_yellow(f"[DEBUG] current_user = {current_user}")
+    @staticmethod
+    def _fmt(entity):
+        cols = {
+            col.name: getattr(entity, col.name)
+            for col in entity.__table__.columns
+            if col.name != "password_hash"
+        }
+        return str(cols)
 
-        # 2) Création d'un collaborateur
-        self.print_cyan("\nCréation d'un collaborateur...")
-        new_user = None
+    # ------------------------------------------------------------------ #
+    #  ----------------------- Collaborateurs -------------------------  #
+    # ------------------------------------------------------------------ #
+    def create_user_cli(self, current_user):
+        fname = self._ask("Prénom : ")
+        lname = self._ask("Nom : ")
+        email = self._ask("Email : ")
+        pwd = self._ask("Mot de passe : ")
+        role_id = self._ask("ID rôle (1=C,2=S,3=G) : ", int)
+
+        sess = self.db.create_session()
         try:
-            new_user = self.writer.create_user(
-                session,
+            u = self.writer.create_user(
+                sess,
                 current_user,
                 employee_number=None,
-                first_name="Jean",
-                last_name="Dupont",
-                email="jean.dupont@example.com",
-                password_hash="hashed_value",
-                role_id=current_user["role_id"]
+                first_name=fname,
+                last_name=lname,
+                email=email,
+                password_hash=self.auth.hasher.hash(pwd),
+                role_id=role_id
             )
-            # TRACE après création
-            print(f"[DataWriterView][TRACE] new_user returned -> id={new_user.id}, "
-                  f"employee_number={new_user.employee_number!r}, "
-                  f"first_name={new_user.first_name!r}, "
-                  f"email={new_user.email!r}")
-            self.print_green(
-                f"[DEBUG] new_user.employee_number = {new_user.employee_number}")
+            sess.commit()
+            self.print_green("✅ Collaborateur créé : " + self._fmt(u))
         except Exception as e:
-            self.print_red(f"[DEBUG] Exception creating user: {e}")
-            session.rollback()
+            sess.rollback()
+            self.print_red(f"❌ {e}")
+        finally:
+            sess.close()
 
-        # 3) Mise à jour du collaborateur si créé
-        if new_user:
-            updates = {"first_name": "Jean-Pierre",
-                       "email": "jp.dupont@example.com"}
-            print(
-                f"[DataWriterView][TRACE] about to call update_user with -> {updates}")
-            try:
-                updated_user = self.writer.update_user(
-                    session,
-                    current_user,
-                    new_user.id,
-                    **updates
-                )
-                # TRACE juste après la mise à jour
-                print(f"[DataWriterView][TRACE] updated_user returned -> id={updated_user.id}, "
-                      f"first_name={updated_user.first_name!r}, "
-                      f"email={updated_user.email!r}")
-                self.print_green(
-                    f"[DEBUG] updated_user.first_name = {updated_user.first_name}")
-                self.print_green(
-                    f"[DEBUG] updated_user.email = {updated_user.email}")
-            except Exception as e:
-                self.print_red(f"[DEBUG] Exception updating user: {e}")
-                session.rollback()
+    def update_user_cli(self, current_user):
+        emp = self._ask("Employee Number : ")
+        field = self._ask(
+            "Champ (first_name, last_name, email, password) : ").lower()
+        value = self._ask("Nouvelle valeur : ")
 
-        # 4) (Le reste de la démo : création de client/contrat/événement, inchangé)
-        from app.models.client import Client
-        client = session.query(Client).filter_by(id=1).first()
-        if not client:
-            self.print_yellow(
-                "Client introuvable. Création d'un client de démonstration…")
-            client = Client(
-                full_name="Client Demo",
-                email="demo@example.com",
-                phone="0000000000",
-                company_name="Demo Corp",
-                commercial_id=new_user.id if new_user else None
-            )
-            session.add(client)
-            session.commit()
-            self.print_green(
-                f"Client de démonstration créé avec ID = {client.id}")
+        if field == "password":
+            value = self.auth.hasher.hash(value)
 
-        new_contract = None
+        sess = self.db.create_session()
         try:
-            new_contract = self.writer.create_contract(
-                session,
-                current_user,
-                client_id=client.id,
-                total_amount=10000.0,
-                remaining_amount=5000.0,
-                is_signed=True
-            )
-            self.print_green(f"[DEBUG] new_contract.id = {new_contract.id}")
+            u = self.writer.update_user_by_employee_number(
+                sess, current_user, emp, **{field: value})
+            sess.commit()
+            self.print_green("✅ Modification : " + self._fmt(u))
         except Exception as e:
-            self.print_red(f"[DEBUG] Exception creating contract: {e}")
-            session.rollback()
+            sess.rollback()
+            self.print_red(f"❌ {e}")
+        finally:
+            sess.close()
 
-        if new_contract:
-            try:
-                updated_contract = self.writer.update_contract(
-                    session,
-                    current_user,
-                    new_contract.id,
-                    remaining_amount=0.0,
-                    is_signed=True
-                )
-                self.print_green(
-                    f"[DEBUG] updated_contract.remaining_amount = {updated_contract.remaining_amount}")
-            except Exception as e:
-                self.print_red(f"[DEBUG] Exception updating contract: {e}")
-                session.rollback()
-
-        new_event = None
+    def delete_user_cli(self, current_user):
+        emp = self._ask("Employee Number à supprimer : ")
+        sess = self.db.create_session()
         try:
-            if new_contract:
-                new_event = self.writer.create_event(
-                    session,
-                    current_user,
-                    contract_id=new_contract.id,
-                    support_id=3,
-                    date_start=datetime(2023, 6, 4, 13, 0),
-                    date_end=datetime(2023, 6, 5, 2, 0),
-                    location="53 Rue du Château, 41120 Candé-sur-Beuvron, France",
-                    attendees=75,
-                    notes="Wedding starts at 3PM, by the river."
-                )
-                self.print_green(f"[DEBUG] new_event.id = {new_event.id}")
+            self.writer.delete_user(sess, current_user, emp)
+            sess.commit()
+            self.print_green("✅ Collaborateur supprimé.")
         except Exception as e:
-            self.print_red(f"[DEBUG] Exception creating event: {e}")
-            session.rollback()
+            sess.rollback()
+            self.print_red(f"❌ {e}")
+        finally:
+            sess.close()
 
-        if new_event:
-            try:
-                updated_event = self.writer.update_event(
-                    session,
-                    current_user,
-                    new_event.id,
-                    attendees=80,
-                    notes="Updated notes for the event."
-                )
-                self.print_green(
-                    f"[DEBUG] updated_event.attendees = {updated_event.attendees}")
-                self.print_green(
-                    f"[DEBUG] updated_event.notes = {updated_event.notes}")
-            except Exception as e:
-                self.print_red(f"[DEBUG] Exception updating event: {e}")
-                session.rollback()
+    # ------------------------------------------------------------------ #
+    #  ---------------------------- Clients ---------------------------  #
+    # ------------------------------------------------------------------ #
+    def create_client_cli(self, current_user):
+        fname = self._ask("Nom complet : ")
+        email = self._ask("Email : ")
+        phone = self._ask("Téléphone : ", allow_empty=True)
+        comp = self._ask("Société : ", allow_empty=True)
 
-        session.close()
-        self.print_header("[DEBUG] DataWriterView.run() - END\n")
+        sess = self.db.create_session()
+        try:
+            c = self.writer.create_client(
+                sess, current_user,
+                full_name=fname,
+                email=email,
+                phone=phone,
+                company_name=comp,
+                commercial_id=None        # attribué auto si commercial
+            )
+            sess.commit()
+            self.print_green("✅ Client créé : " + self._fmt(c))
+        except Exception as e:
+            sess.rollback()
+            self.print_red(f"❌ {e}")
+        finally:
+            sess.close()
+
+    def update_client_cli(self, current_user):
+        cid = self._ask("ID client : ", int)
+        new_name = self._ask("Nouveau nom complet (vide si aucun) : ",
+                             allow_empty=True)
+        new_email = self._ask("Nouvel email (vide si aucun) : ",
+                              allow_empty=True)
+        phone = self._ask("Téléphone (vide si aucun) : ", allow_empty=True)
+        comp = self._ask("Société (vide si aucune) : ", allow_empty=True)
+
+        updates = {}
+        if new_name:
+            updates["full_name"] = new_name
+        if new_email:
+            updates["email"] = new_email
+        if phone is not None:
+            updates["phone"] = phone
+        if comp is not None:
+            updates["company_name"] = comp
+        if not updates:
+            self.print_yellow("Aucune modification.")
+            return
+
+        sess = self.db.create_session()
+        try:
+            c = self.writer.update_client(sess, current_user, cid, **updates)
+            sess.commit()
+            self.print_green("✅ Client modifié : " + self._fmt(c))
+        except Exception as e:
+            sess.rollback()
+            self.print_red(f"❌ {e}")
+        finally:
+            sess.close()
+
+    # ------------------------------------------------------------------ #
+    #  --------------------------- Contrats ---------------------------  #
+    # ------------------------------------------------------------------ #
+    def create_contract_cli(self, current_user):
+        cid = self._ask("ID client : ", int)
+        tot = self._ask("Montant total : ", float)
+        rem = self._ask("Montant restant : ", float)
+        signed = self._ask("Signé ? (o/n) : ").lower() == "o"
+
+        sess = self.db.create_session()
+        try:
+            ctr = self.writer.create_contract(
+                sess, current_user,
+                client_id=cid,
+                total_amount=tot,
+                remaining_amount=rem,
+                is_signed=signed
+            )
+            sess.commit()
+            self.print_green("✅ Contrat créé : " + self._fmt(ctr))
+        except Exception as e:
+            sess.rollback()
+            self.print_red(f"❌ {e}")
+        finally:
+            sess.close()
+
+    def update_contract_cli(self, current_user):
+        ctr_id = self._ask("ID contrat : ", int)
+        rem = self._ask("Nouveau restant (vide si aucun) : ",
+                        float, allow_empty=True)
+        signed = self._ask("Signé ? (o/n/vide) : ",
+                           allow_empty=True).lower()
+        updates = {}
+        if rem is not None:
+            updates["remaining_amount"] = rem
+        if signed == "o":
+            updates["is_signed"] = True
+        elif signed == "n":
+            updates["is_signed"] = False
+        if not updates:
+            self.print_yellow("Aucune modification.")
+            return
+
+        sess = self.db.create_session()
+        try:
+            ctr = self.writer.update_contract(
+                sess, current_user, ctr_id, **updates)
+            sess.commit()
+            self.print_green("✅ Contrat modifié : " + self._fmt(ctr))
+        except Exception as e:
+            sess.rollback()
+            self.print_red(f"❌ {e}")
+        finally:
+            sess.close()
+
+    # ------------------------------------------------------------------ #
+    #  --------------------------- Événements -------------------------  #
+    # ------------------------------------------------------------------ #
+    def create_event_cli(self, current_user):
+        ctr_id = self._ask("ID contrat : ", int)
+        date = datetime.utcnow()            # simple pour la démo
+        loc = self._ask("Lieu : ", allow_empty=True)
+        att = self._ask("Participants (int) : ", int)
+        notes = self._ask("Notes : ", allow_empty=True)
+
+        sess = self.db.create_session()
+        try:
+            ev = self.writer.create_event(
+                sess, current_user,
+                contract_id=ctr_id,
+                support_id=None,
+                date_start=date,
+                date_end=None,
+                location=loc,
+                attendees=att,
+                notes=notes
+            )
+            sess.commit()
+            self.print_green("✅ Événement créé : " + self._fmt(ev))
+        except Exception as e:
+            sess.rollback()
+            self.print_red(f"❌ {e}")
+        finally:
+            sess.close()
+
+    def assign_support_cli(self, current_user, event_id=None, support_emp=None):
+        """
+        • utilisée directement par le CLI principal
+        • ré-utilisable dans les tests (appel programmatique)
+        """
+        if event_id is None:
+            event_id = self._ask("ID événement : ", int)
+        if support_emp is None:
+            support_emp = self._ask("Employee Number du support : ")
+
+        sess = self.db.create_session()
+        try:
+            sup = (
+                sess.query(User)
+                .filter_by(employee_number=support_emp, role_id=2)
+                .first()
+            )
+            if not sup:
+                raise Exception("Support introuvable ou rôle incorrect.")
+
+            ev = self.writer.update_event(
+                sess, current_user, event_id, support_id=sup.id)
+            sess.commit()
+            self.print_green("✅ Support assigné : " + self._fmt(ev))
+            return ev
+        except Exception as e:
+            sess.rollback()
+            self.print_red(f"❌ {e}")
+            raise
+        finally:
+            sess.close()

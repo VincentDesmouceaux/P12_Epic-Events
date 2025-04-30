@@ -1,4 +1,13 @@
-# app/controllers/data_reader.py
+"""
+Contrôleur de lecture.
+
+⚠️  Règle métier (mise à jour) :
+    une fois authentifiés, les trois rôles (gestion, commercial, support)
+    peuvent consulter TOUS les clients, contrats et événements.
+
+Un commercial *peut* vouloir filtrer « ses » clients/contrats – cela se
+fera côté vue ou via des paramètres facultatifs (non gérés ici pour l’instant).
+"""
 
 from app.models.client import Client
 from app.models.contract import Contract
@@ -9,139 +18,85 @@ class DataReader:
     def __init__(self, db_connection):
         self.db_connection = db_connection
 
-    def _debug(self, msg, **kwargs):
-        print(f"[DataReader][DEBUG] {msg} -> {kwargs}")
+    # ------------------------------------------------------------------ #
+    #  outils internes de log
+    # ------------------------------------------------------------------ #
+    def _debug(self, msg, **kw):
+        print(f"[DataReader][DEBUG] {msg} -> {kw}")
 
     def _trace(self, msg):
         print(f"[DataReader][TRACE] {msg}")
 
-    def _check_auth(self, current_user):
+    # ------------------------------------------------------------------ #
+    #  sécurité très minimale : vérifie qu’un user est bien présent
+    # ------------------------------------------------------------------ #
+    def _check_auth(self, current_user: dict):
         self._debug("_check_auth", current_user=current_user)
         if not current_user:
-            raise Exception("Utilisateur non authentifié.")
+            raise PermissionError("Utilisateur non authentifié.")
 
+    # ------------------------------------------------------------------ #
+    #  clients
+    # ------------------------------------------------------------------ #
     def get_all_clients(self, session, current_user):
-        print("\n--- get_all_clients START ---")
-        print(f"current_user: {current_user}")
+        self._trace("get_all_clients")
         self._check_auth(current_user)
 
-        session.expire_all()
-        print("session.expire_all() appelé")
-
-        # --- Avant filtrage ---
-        all_clients = session.query(Client).all()
-        print(
-            f"Total clients en base (avant filtrage) = {len(all_clients)}, ids = {[c.id for c in all_clients]}"
-        )
-
+        session.expire_all()                 # toujours relire la BD
         role = current_user.get("role")
-        print(f"Rôle détecté = '{role}'")
 
-        if role == "commercial":
-            print("→ Branche COMMERCIAL")
-            lst = session.query(Client).filter_by(
-                commercial_id=current_user["id"]
-            ).all()
-            print(
-                f" commercial sees {len(lst)} clients, ids = {[c.id for c in lst]}"
+        # → accès complet quel que soit le rôle
+        # (on garde ici la possibilité de filtrer par commercial si on le
+        #  souhaite ultérieurement, mais ce n’est PAS imposé).
+        if role == "commercial" and "force_filter" in current_user:
+            return (
+                session.query(Client)
+                .filter(Client.commercial_id == current_user["id"])
+                .all()
             )
-            print("--- get_all_clients END ---\n")
-            return lst
 
-        if role == "support":
-            print("→ Branche SUPPORT (accès interdit aux clients)")
-            raise PermissionError("Accès refusé aux clients pour le support")
+        return session.query(Client).all()
 
-        # gestion et autres
-        print("→ Branche GESTION (retourne tous les clients)")
-        lst = all_clients
-        print(f" gestion sees {len(lst)} clients, ids = {[c.id for c in lst]}")
-        print("--- get_all_clients END ---\n")
-        return lst
-
+    # ------------------------------------------------------------------ #
+    #  contrats
+    # ------------------------------------------------------------------ #
     def get_all_contracts(self, session, current_user):
-        print("\n--- get_all_contracts START ---")
-        print(f"current_user: {current_user}")
+        self._trace("get_all_contracts")
         self._check_auth(current_user)
 
         session.expire_all()
-        print("session.expire_all() appelé")
-
-        # --- Avant filtrage ---
-        all_contracts = session.query(Contract).all()
-        print(
-            f"Total contracts en base (avant filtrage) = {len(all_contracts)}, ids = {[c.id for c in all_contracts]}"
-        )
-
         role = current_user.get("role")
-        print(f"Rôle détecté = '{role}'")
 
-        if role == "commercial":
-            print("→ Branche COMMERCIAL")
-            lst = session.query(Contract).filter_by(
-                commercial_id=current_user["id"]
-            ).all()
-            print(
-                f" commercial sees {len(lst)} contracts, ids = {[c.id for c in lst]}"
+        if role == "commercial" and "force_filter" in current_user:
+            return (
+                session.query(Contract)
+                .filter(Contract.commercial_id == current_user["id"])
+                .all()
             )
-            print("--- get_all_contracts END ---\n")
-            return lst
 
-        if role == "support":
-            print("→ Branche SUPPORT (accès interdit aux contrats)")
-            raise PermissionError("Accès refusé aux contrats pour le support")
+        return session.query(Contract).all()
 
-        # gestion et autres
-        print("→ Branche GESTION (retourne tous les contrats)")
-        lst = all_contracts
-        print(
-            f" gestion sees {len(lst)} contracts, ids = {[c.id for c in lst]}")
-        print("--- get_all_contracts END ---\n")
-        return lst
-
+    # ------------------------------------------------------------------ #
+    #  événements
+    # ------------------------------------------------------------------ #
     def get_all_events(self, session, current_user):
-        print("\n--- get_all_events START ---")
-        print(f"current_user: {current_user}")
+        self._trace("get_all_events")
         self._check_auth(current_user)
 
         session.expire_all()
-        print("session.expire_all() appelé")
-
-        # --- Avant filtrage ---
-        all_events = session.query(Event).all()
-        print(
-            f"Total events en base (avant filtrage) = {len(all_events)}, ids = {[e.id for e in all_events]}"
-        )
-
         role = current_user.get("role")
-        print(f"Rôle détecté = '{role}'")
 
-        if role == "support":
-            print("→ Branche SUPPORT")
-            lst = session.query(Event).filter_by(
-                support_id=current_user["id"]
-            ).all()
-            print(
-                f" support sees {len(lst)} events, ids = {[e.id for e in lst]}")
-            print("--- get_all_events END ---\n")
-            return lst
-
-        if role == "commercial":
-            print("→ Branche COMMERCIAL (join Contract)")
-            lst = (
+        if role == "commercial" and "force_filter" in current_user:
+            # on récupère uniquement les événements liés aux contrats du commercial
+            return (
                 session.query(Event)
                 .join(Contract, Event.contract_id == Contract.id)
                 .filter(Contract.commercial_id == current_user["id"])
                 .all()
             )
-            print(
-                f" commercial sees {len(lst)} events, ids = {[e.id for e in lst]}")
-            print("--- get_all_events END ---\n")
-            return lst
 
-        # gestion et autres
-        print("→ Branche GESTION (retourne tous les événements)")
-        lst = all_events
-        print(f" gestion sees {len(lst)} events, ids = {[e.id for e in lst]}")
-        print("--- get_all_events END ---\n")
-        return lst
+        if role == "support" and "force_filter" in current_user:
+            # uniquement les événements assignés à ce technicien support
+            return session.query(Event).filter(Event.support_id == current_user["id"]).all()
+
+        return session.query(Event).all()
