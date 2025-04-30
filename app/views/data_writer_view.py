@@ -1,4 +1,5 @@
 # app/views/data_writer_view.py
+
 from app.controllers.data_writer import DataWriter
 from datetime import datetime
 from app.views.generic_view import GenericView
@@ -15,16 +16,18 @@ class DataWriterView(GenericView):
     def run(self):
         """
         Démonstration interactive pour un utilisateur "gestion" :
-        Création d'un collaborateur, d'un contrat (en utilisant le commercial lié au client)
-        et d'un événement.
+        Création d'un collaborateur, mise à jour, puis création
+        d'un contrat et d'un événement.
         """
         session = self.db_conn.create_session()
         current_user = {"id": 1, "role": "gestion", "role_id": 3}
-        self.print_header("\n[DEBUG] DataWriterView.run() - START")
-        self.print_yellow("[DEBUG] current_user = " + str(current_user))
 
-        # Création d'un collaborateur
-        self.print_cyan("Création d'un collaborateur...")
+        # 1) Affichage du point de départ
+        self.print_header("\n[DEBUG] DataWriterView.run() - START")
+        self.print_yellow(f"[DEBUG] current_user = {current_user}")
+
+        # 2) Création d'un collaborateur
+        self.print_cyan("\nCréation d'un collaborateur...")
         new_user = None
         try:
             new_user = self.writer.create_user(
@@ -35,52 +38,62 @@ class DataWriterView(GenericView):
                 last_name="Dupont",
                 email="jean.dupont@example.com",
                 password_hash="hashed_value",
-                role_id=current_user.get("role_id", 3)
+                role_id=current_user["role_id"]
             )
-            self.print_green("[DEBUG] new_user = " + str(new_user))
-            if new_user:
-                self.print_green(
-                    "[DEBUG] new_user.employee_number = " + new_user.employee_number)
+            # TRACE après création
+            print(f"[DataWriterView][TRACE] new_user returned -> id={new_user.id}, "
+                  f"employee_number={new_user.employee_number!r}, "
+                  f"first_name={new_user.first_name!r}, "
+                  f"email={new_user.email!r}")
+            self.print_green(
+                f"[DEBUG] new_user.employee_number = {new_user.employee_number}")
         except Exception as e:
-            self.print_red("[DEBUG] Exception creating user: " + str(e))
+            self.print_red(f"[DEBUG] Exception creating user: {e}")
             session.rollback()
 
+        # 3) Mise à jour du collaborateur si créé
         if new_user:
+            updates = {"first_name": "Jean-Pierre",
+                       "email": "jp.dupont@example.com"}
+            print(
+                f"[DataWriterView][TRACE] about to call update_user with -> {updates}")
             try:
                 updated_user = self.writer.update_user(
                     session,
                     current_user,
                     new_user.id,
-                    first_name="Jean-Pierre",
-                    email="jp.dupont@example.com"
+                    **updates
                 )
+                # TRACE juste après la mise à jour
+                print(f"[DataWriterView][TRACE] updated_user returned -> id={updated_user.id}, "
+                      f"first_name={updated_user.first_name!r}, "
+                      f"email={updated_user.email!r}")
                 self.print_green(
-                    "[DEBUG] updated_user.first_name = " + updated_user.first_name)
+                    f"[DEBUG] updated_user.first_name = {updated_user.first_name}")
                 self.print_green(
-                    "[DEBUG] updated_user.email = " + updated_user.email)
+                    f"[DEBUG] updated_user.email = {updated_user.email}")
             except Exception as e:
-                self.print_red("[DEBUG] Exception updating user: " + str(e))
+                self.print_red(f"[DEBUG] Exception updating user: {e}")
                 session.rollback()
 
-        # Vérification de l'existence d'un client avec id=1, sinon en créer un
+        # 4) (Le reste de la démo : création de client/contrat/événement, inchangé)
         from app.models.client import Client
         client = session.query(Client).filter_by(id=1).first()
         if not client:
             self.print_yellow(
-                "Client introuvable. Création d'un client de démonstration...")
+                "Client introuvable. Création d'un client de démonstration…")
             client = Client(
                 full_name="Client Demo",
                 email="demo@example.com",
                 phone="0000000000",
                 company_name="Demo Corp",
-                commercial_id=new_user.id  # Pour l'exemple, on utilise new_user
+                commercial_id=new_user.id if new_user else None
             )
             session.add(client)
             session.commit()
             self.print_green(
-                "Client de démonstration créé avec ID = " + str(client.id))
+                f"Client de démonstration créé avec ID = {client.id}")
 
-        # Création d'un contrat sans demande manuelle de l'ID du commercial
         new_contract = None
         try:
             new_contract = self.writer.create_contract(
@@ -91,10 +104,9 @@ class DataWriterView(GenericView):
                 remaining_amount=5000.0,
                 is_signed=True
             )
-            self.print_green("[DEBUG] new_contract.id = " +
-                             (str(new_contract.id) if new_contract else "None"))
+            self.print_green(f"[DEBUG] new_contract.id = {new_contract.id}")
         except Exception as e:
-            self.print_red("[DEBUG] Exception creating contract: " + str(e))
+            self.print_red(f"[DEBUG] Exception creating contract: {e}")
             session.rollback()
 
         if new_contract:
@@ -107,15 +119,11 @@ class DataWriterView(GenericView):
                     is_signed=True
                 )
                 self.print_green(
-                    "[DEBUG] updated_contract.remaining_amount = " + str(updated_contract.remaining_amount))
+                    f"[DEBUG] updated_contract.remaining_amount = {updated_contract.remaining_amount}")
             except Exception as e:
-                self.print_red(
-                    "[DEBUG] Exception updating contract: " + str(e))
+                self.print_red(f"[DEBUG] Exception updating contract: {e}")
                 session.rollback()
-        else:
-            self.print_red("[DEBUG] new_contract n'a pas été créé.")
 
-        # Création d'un événement
         new_event = None
         try:
             if new_contract:
@@ -130,10 +138,9 @@ class DataWriterView(GenericView):
                     attendees=75,
                     notes="Wedding starts at 3PM, by the river."
                 )
-                self.print_green("[DEBUG] new_event.id = " +
-                                 (str(new_event.id) if new_event else "None"))
+                self.print_green(f"[DEBUG] new_event.id = {new_event.id}")
         except Exception as e:
-            self.print_red("[DEBUG] Exception creating event: " + str(e))
+            self.print_red(f"[DEBUG] Exception creating event: {e}")
             session.rollback()
 
         if new_event:
@@ -146,48 +153,12 @@ class DataWriterView(GenericView):
                     notes="Updated notes for the event."
                 )
                 self.print_green(
-                    "[DEBUG] updated_event.attendees = " + str(updated_event.attendees))
+                    f"[DEBUG] updated_event.attendees = {updated_event.attendees}")
                 self.print_green(
-                    "[DEBUG] updated_event.notes = " + updated_event.notes)
+                    f"[DEBUG] updated_event.notes = {updated_event.notes}")
             except Exception as e:
-                self.print_red("[DEBUG] Exception updating event: " + str(e))
+                self.print_red(f"[DEBUG] Exception updating event: {e}")
                 session.rollback()
 
         session.close()
         self.print_header("[DEBUG] DataWriterView.run() - END\n")
-
-    def create_user_cli(self, current_user, fname, lname, email, password):
-        session = self.db_conn.create_session()
-        try:
-            hashed_password = self.auth_controller.hasher.hash(password)
-            user = self.writer.create_user(
-                session,
-                current_user,
-                employee_number=None,
-                first_name=fname,
-                last_name=lname,
-                email=email,
-                password_hash=hashed_password,
-                role_id=current_user.get("role_id", 3)
-            )
-            self.print_green(
-                "Collaborateur créé : Employee Number = " + user.employee_number)
-        except Exception as e:
-            self.print_red(
-                "Erreur lors de la création du collaborateur: " + str(e))
-            session.rollback()
-        finally:
-            session.close()
-
-    def update_user_cli(self, current_user, employee_number, **updates):
-        session = self.db_conn.create_session()
-        try:
-            updated = self.writer.update_user_by_employee_number(
-                session, current_user, employee_number, **updates)
-            self.print_green(
-                f"Collaborateur {updated.employee_number} mis à jour.")
-        except Exception as e:
-            self.print_red("Erreur lors de la mise à jour: " + str(e))
-            session.rollback()
-        finally:
-            session.close()
