@@ -47,7 +47,10 @@ class CLIInterface(GenericView):
             email, password)
         if user:
             self.current_user = {
-                "id": user.id, "role": user.role.name, "role_id": getattr(user.role, "id", 3)}
+                "id": user.id,
+                "role": user.role.name,
+                "role_id": getattr(user.role, "id", 3)
+            }
             self.print_green(
                 f"Authentification réussie. Rôle = {user.role.name}")
         else:
@@ -106,11 +109,13 @@ class CLIInterface(GenericView):
         print(self.BLUE + "[2] Modifier un contrat" + self.END)
         print(self.BLUE + "[3] Retour" + self.END)
         choice = input(self.CYAN + "Choix : " + self.END).strip()
+
         if choice == "1":
+            # --- Création ---
             client_id_str = input(self.CYAN + "ID du client : " + self.END)
             try:
                 client_id = int(client_id_str)
-            except:
+            except ValueError:
                 self.print_red("ID client invalide.")
                 return
             total_amount_str = input(self.CYAN + "Montant total : " + self.END)
@@ -119,12 +124,13 @@ class CLIInterface(GenericView):
             try:
                 total_amount = float(total_amount_str)
                 remaining_amount = float(remaining_amount_str)
-            except:
+            except ValueError:
                 self.print_red("Montants invalides.")
                 return
             signed_str = input(
                 self.CYAN + "Contrat signé ? (O/N) : " + self.END).strip().upper()
-            is_signed = True if signed_str == "O" else False
+            is_signed = signed_str == "O"
+
             session = self.db_connection.create_session()
             try:
                 contract = self.writer_view.writer.create_contract(
@@ -135,52 +141,93 @@ class CLIInterface(GenericView):
                     remaining_amount,
                     is_signed
                 )
-                self.print_green("Contrat créé avec ID = " + str(contract.id))
+                self.print_green(f"Contrat créé avec ID = {contract.id}")
             except Exception as e:
                 self.print_red(
                     "Erreur lors de la création du contrat : " + str(e))
                 session.rollback()
             finally:
                 session.close()
+
         elif choice == "2":
+            # --- Modification ---
             contract_id_str = input(
                 self.CYAN + "ID du contrat à modifier : " + self.END)
             try:
                 contract_id = int(contract_id_str)
-            except:
+            except ValueError:
                 self.print_red("ID contrat invalide.")
                 return
+
+            # Client
+            client_id_str = input(
+                self.CYAN + "Nouveau ID client (laisser vide si inchangé) : " + self.END).strip()
+            # Commercial par employee_number
+            emp_num = input(
+                self.CYAN + "Employee Number du commercial (Cxxx) (laisser vide si inchangé) : " + self.END).strip()
+
+            # Montants et signature
             total_amount_str = input(
-                self.CYAN + "Nouveau montant total : " + self.END)
+                self.CYAN + "Nouveau montant total (laisser vide si inchangé) : " + self.END).strip()
             remaining_amount_str = input(
-                self.CYAN + "Nouveau montant restant : " + self.END)
+                self.CYAN + "Nouveau montant restant (laisser vide si inchangé) : " + self.END).strip()
             signed_str = input(
-                self.CYAN + "Contrat signé ? (O/N) : " + self.END).strip().upper()
-            try:
-                total_amount = float(total_amount_str)
-                remaining_amount = float(remaining_amount_str)
-            except:
-                self.print_red("Montants invalides.")
+                self.CYAN + "Contrat signé ? (O/N, laisser vide si inchangé) : " + self.END).strip().upper()
+
+            updates = {}
+            if client_id_str:
+                try:
+                    updates["client_id"] = int(client_id_str)
+                except ValueError:
+                    self.print_red("ID client invalide.")
+                    return
+            if emp_num:
+                session = self.db_connection.create_session()
+                from app.models.user import User
+                support_user = session.query(User).filter_by(
+                    employee_number=emp_num).first()
+                session.close()
+                if not support_user:
+                    self.print_red(
+                        "Aucun commercial ne correspond à cet employee_number.")
+                    return
+                updates["commercial_id"] = support_user.id
+            if total_amount_str:
+                try:
+                    updates["total_amount"] = float(total_amount_str)
+                except ValueError:
+                    self.print_red("Montant total invalide.")
+                    return
+            if remaining_amount_str:
+                try:
+                    updates["remaining_amount"] = float(remaining_amount_str)
+                except ValueError:
+                    self.print_red("Montant restant invalide.")
+                    return
+            if signed_str == "O":
+                updates["is_signed"] = True
+            elif signed_str == "N":
+                updates["is_signed"] = False
+
+            if not updates:
+                self.print_yellow("Aucune modification renseignée.")
                 return
-            is_signed = True if signed_str == "O" else False
+
             session = self.db_connection.create_session()
             try:
-                updated_contract = self.writer_view.writer.update_contract(
-                    session,
-                    self.current_user,
-                    contract_id,
-                    total_amount=total_amount,
-                    remaining_amount=remaining_amount,
-                    is_signed=is_signed
+                updated = self.writer_view.writer.update_contract(
+                    session, self.current_user, contract_id, **updates
                 )
-                self.print_green("Contrat mis à jour, montant total = " + str(updated_contract.total_amount) +
-                                 ", montant restant = " + str(updated_contract.remaining_amount))
+                modifs = ", ".join(f"{k}={v}" for k, v in updates.items())
+                self.print_green(
+                    f"Contrat #{updated.id} mis à jour ({modifs}).")
             except Exception as e:
                 self.print_red(
                     "Erreur lors de la modification du contrat : " + str(e))
                 session.rollback()
             finally:
                 session.close()
+
         elif choice == "3":
             return
         else:
@@ -194,6 +241,7 @@ class CLIInterface(GenericView):
               "[2] Modifier un événement pour assigner un support" + self.END)
         print(self.BLUE + "[3] Retour" + self.END)
         choice = input(self.CYAN + "Choix : " + self.END).strip()
+
         if choice == "1":
             session = self.db_connection.create_session()
             try:
@@ -202,52 +250,49 @@ class CLIInterface(GenericView):
                     Event.support_id == None).all()
                 if events:
                     self.print_green("Événements sans support:")
-                    for event in events:
-                        self.print_blue(self.reader_view.format_entity(event))
+                    for ev in events:
+                        self.print_blue(self.reader_view.format_entity(ev))
                 else:
                     self.print_yellow("Aucun événement sans support.")
             except Exception as e:
                 self.print_red("Erreur lors de la consultation : " + str(e))
             finally:
                 session.close()
+
         elif choice == "2":
             event_id_str = input(
                 self.CYAN + "ID de l'événement à modifier : " + self.END)
             try:
                 event_id = int(event_id_str)
-            except:
+            except ValueError:
                 self.print_red("ID invalide.")
                 return
-            # Demander l'employee_number du collaborateur support
             emp_number = input(
-                self.CYAN + "Employee Number du collaborateur support à assigner : " + self.END).strip()
+                self.CYAN + "Employee Number du support à assigner : " + self.END).strip()
             if not emp_number:
                 self.print_red("Employee Number invalide.")
                 return
             session = self.db_connection.create_session()
             try:
                 from app.models.user import User
-                support_user = session.query(User).filter_by(
+                u = session.query(User).filter_by(
                     employee_number=emp_number).first()
-                if not support_user:
+                if not u:
                     self.print_red(
-                        "Aucun collaborateur trouvé avec cet employee_number.")
-                    session.close()
+                        "Aucun support ne correspond à cet employee_number.")
                     return
-                updated_event = self.writer_view.writer.update_event(
-                    session,
-                    self.current_user,
-                    event_id,
-                    support_id=support_user.id
+                updated = self.writer_view.writer.update_event(
+                    session, self.current_user, event_id, support_id=u.id
                 )
                 self.print_green(
-                    "Événement mis à jour, support assigné = " + support_user.employee_number)
+                    f"Événement mis à jour, support assigné = {u.employee_number}")
             except Exception as e:
                 self.print_red(
                     "Erreur lors de la modification de l'événement : " + str(e))
                 session.rollback()
             finally:
                 session.close()
+
         elif choice == "3":
             return
         else:
@@ -275,6 +320,7 @@ class CLIInterface(GenericView):
             self.current_user["role_id"] = role_id
             self.writer_view.create_user_cli(
                 self.current_user, fname, lname, email, password)
+
         elif choice == "2":
             emp_num = input(
                 self.CYAN + "Employee Number du collaborateur à modifier : " + self.END)
@@ -293,20 +339,20 @@ class CLIInterface(GenericView):
                 updates["email"] = email
             self.writer_view.update_user_cli(
                 self.current_user, emp_num, **updates)
+
         elif choice == "3":
             emp_num = input(
                 self.CYAN + "Employee Number du collaborateur à supprimer : " + self.END)
             session = self.db_connection.create_session()
             try:
-                result = self.writer_view.writer.delete_user(
-                    session, self.current_user, emp_num)
-                if result:
+                if self.writer_view.writer.delete_user(session, self.current_user, emp_num):
                     self.print_green("Collaborateur supprimé avec succès.")
             except Exception as e:
                 self.print_red("Erreur lors de la suppression : " + str(e))
                 session.rollback()
             finally:
                 session.close()
+
         elif choice == "4":
             return
 
@@ -315,5 +361,4 @@ if __name__ == "__main__":
     from app.config.database import DatabaseConfig, DatabaseConnection
     db_config = DatabaseConfig()
     db_connection = DatabaseConnection(db_config)
-    cli = CLIInterface(db_connection)
-    cli.run()
+    CLIInterface(db_connection).run()
