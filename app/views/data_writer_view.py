@@ -402,3 +402,118 @@ class DataWriterView(GenericView):
             except Exception as exc:
                 s.rollback()
                 self.print_red(f"❌ {exc}")
+
+    # ============================ SUPPORT ============================ #
+
+    # ================================================================= #
+    #  =============== ÉVÉNEMENTS – SOUS-MENU SUPPORT ================= #
+    # ================================================================= #
+
+    def menu_event_support(self, current_user: Dict[str, Any]) -> None:
+        """Sous-menu dédié au support : affiche et met à jour *ses* événements."""
+        while True:
+            self.print_header("-- Événements (support) --")
+            print(self.BLUE + "[1] Mes événements" + self.END)
+            print(self.BLUE + "[2] Mettre à jour un événement" + self.END)
+            print(self.BLUE + "[0] Retour" + self.END)
+            ch = input(self.CYAN + "Choix : " + self.END).strip()
+
+            if ch == "1":
+                self._display_my_events(current_user)
+            elif ch == "2":
+                self._update_my_event_cli(current_user)
+            elif ch == "0":
+                break
+            else:
+                self.print_red("Option invalide.")
+
+    # ----------------------------------------------------------------- #
+    def _display_my_events(self, current_user: Dict[str, Any]) -> None:
+        with self.db.create_session() as s:
+            evts = s.query(Event).filter_by(
+                support_id=current_user["id"]).all()
+            if not evts:
+                self.print_yellow("Aucun événement ne vous est attribué.")
+                return
+            self.print_green("--- Vos événements ---")
+            for ev in evts:
+                print(self._fmt(ev))
+
+    # ----------------------------------------------------------------- #
+    def _update_my_event_cli(self, current_user: Dict[str, Any]) -> None:
+        """Le support peut modifier lieu, notes, dates et participants."""
+        ev_id = self._ask("ID événement à modifier : ", int)
+
+        with self.db.create_session() as chk:
+            ev = chk.get(Event, ev_id)
+        if not ev:
+            self.print_red("Événement introuvable.")
+            return
+        if ev.support_id != current_user["id"]:
+            self.print_red("Vous n'êtes pas assigné à cet événement.")
+            return
+
+        self.print_yellow("→ Laisser vide pour conserver la valeur.")
+        # --- lieu & notes ---------------------------------------------
+        new_loc = self._ask(f"Lieu ({ev.location}) : ", allow_empty=True)
+        new_notes = self._ask("Notes (vide)        : ", allow_empty=True)
+
+        # --- dates ----------------------------------------------------
+        def _parse_date(raw: str | None) -> Optional[datetime]:
+            if not raw:
+                return None
+            try:
+                return datetime.strptime(raw, "%Y-%m-%d")
+            except ValueError:
+                self.print_red("Format attendu : YYYY-MM-DD.")
+                return None
+
+        d_start_raw = self._ask(
+            f"Date début ({ev.date_start.date()}) YYYY-MM-DD : ",
+            allow_empty=True)
+        d_end_raw = self._ask(
+            f"Date fin   ({ev.date_end.date() if ev.date_end else ''}) YYYY-MM-DD : ",
+            allow_empty=True)
+
+        new_start = _parse_date(d_start_raw)
+        new_end = _parse_date(d_end_raw)
+
+        # cohérence chrono
+        check_start = new_start or ev.date_start
+        check_end = new_end or ev.date_end
+        if check_end and check_end < check_start:
+            self.print_red(
+                "La date fin doit être postérieure à la date début.")
+            return
+
+        # --- participants --------------------------------------------
+        new_att = self._ask(
+            f"Participants ({ev.attendees}) : ", int, allow_empty=True)
+
+        # --- construction du dict d’updates --------------------------
+        updates: Dict[str, Any] = {}
+        if new_loc:
+            updates["location"] = new_loc
+        if new_notes:
+            updates["notes"] = new_notes
+        if new_start:
+            updates["date_start"] = new_start
+        if new_end:
+            updates["date_end"] = new_end
+        if new_att is not None:
+            updates["attendees"] = new_att
+
+        if not updates:
+            self.print_yellow("Aucune modification.")
+            return
+
+        with self.db.create_session() as s:
+            try:
+                ev_upd = self.writer.update_event(
+                    s, current_user, ev_id, **updates)
+                s.commit()
+                self.print_green(
+                    "✅ Événement mis à jour : " + self._fmt(ev_upd))
+            except Exception as exc:
+                s.rollback()
+                self.print_red(f"❌ {exc}")
