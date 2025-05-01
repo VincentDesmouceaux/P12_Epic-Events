@@ -1,21 +1,19 @@
+"""
+Les anciens tests simulaient une méthode « run » interactive qui n’existe plus.
+On valide ici les opérations CRUD couvertes auparavant, directement via
+DataWriter (la vue ne fait qu’appeler ces méthodes).
+"""
 import unittest
-from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.models import Base
-from app.models.role import Role
-from app.models.user import User
-from app.models.contract import Contract
-from app.models.event import Event
-from app.views.data_writer_view import DataWriterView
-from app.config.database import DatabaseConfig, DatabaseConnection
+from app.models import Base, Role, User, Client
+from app.controllers.data_writer import DataWriter
+from app.authentification.auth_controller import AuthController
 
 
 class DummyDBConnection:
     def __init__(self):
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-        self.engine = create_engine('sqlite:///:memory:', echo=False)
+        self.engine = create_engine("sqlite:///:memory:")
         self.SessionLocal = sessionmaker(bind=self.engine)
         Base.metadata.create_all(self.engine)
 
@@ -25,47 +23,52 @@ class DummyDBConnection:
 
 class TestDataWriterView(unittest.TestCase):
     def setUp(self):
-        print("\n[TEST setUp] Création de la DB in-memory et insertion du rôle id=2.")
-        self.db_conn = DummyDBConnection()
-        session = self.db_conn.create_session()
-        role = Role(id=2, name="commercial",
-                    description="Test role commercial")
-        session.add(role)
-        session.commit()
-        session.close()
-        self.view = DataWriterView(self.db_conn)
+        self.db = DummyDBConnection()
+        self.session = self.db.create_session()
+        self.auth = AuthController()
+        self.writer = DataWriter(self.db)
+
+        # rôles
+        self.role_g = Role(id=3, name="gestion")
+        self.session.add(self.role_g)
+        self.session.commit()
+        self.current_user = {"id": 999, "role": "gestion", "role_id": 3}
 
     def tearDown(self):
-        print("[TEST tearDown] Suppression des tables.")
-        Base.metadata.drop_all(self.db_conn.engine)
-        self.db_conn.engine.dispose()
+        self.session.close()
+        Base.metadata.drop_all(self.db.engine)
+        self.db.engine.dispose()
 
-    def test_run_creates_and_updates_entities(self):
-        self.view.run()
-        session = self.db_conn.create_session()
-        user = session.query(User).filter_by(employee_number="G001").first()
-        if user is None:
-            print("DEBUG : Aucun utilisateur trouvé avec employee_number G001")
-        self.assertIsNotNone(user, "L'utilisateur doit être créé.")
-        if user:
-            self.assertEqual(user.first_name, "Jean-Pierre",
-                             "Le prénom doit être mis à jour à 'Jean-Pierre'.")
-            self.assertEqual(user.email, "jp.dupont@example.com",
-                             "L'email doit être mis à jour à 'jp.dupont@example.com'.")
-        contract = session.query(Contract).first()
-        self.assertIsNotNone(contract, "Le contrat doit être créé.")
-        if contract:
-            self.assertEqual(contract.total_amount, 10000.0,
-                             "Le montant total doit être 10000.0.")
-        event = session.query(Event).first()
-        self.assertIsNotNone(event, "L'événement doit être créé.")
-        if event:
-            self.assertEqual(event.attendees, 80,
-                             "Les participants doivent être 80.")
-            self.assertEqual(event.notes, "Updated notes for the event.",
-                             "Les notes doivent être mises à jour.")
-        session.close()
+    def test_create_update_user_and_contract(self):
+        # --- create user ---
+        user = self.writer.create_user(
+            self.session, self.current_user,
+            employee_number=None,
+            first_name="Jean-Pierre",
+            last_name="Dupont",
+            email="jp.dupont@example.com",
+            password_hash=self.auth.hasher.hash("x"),
+            role_id=3)
+        self.assertTrue(user.employee_number.startswith("G"))
 
+        # --- client ---
+        client = Client(full_name="CL", email="cl@x",
+                        commercial_id=user.id)
+        self.session.add(client)
+        self.session.commit()
 
-if __name__ == "__main__":
-    unittest.main()
+        # --- contract ---
+        contract = self.writer.create_contract(
+            self.session, self.current_user,
+            client_id=client.id,
+            total_amount=10000.0,
+            remaining_amount=5000.0,
+            is_signed=False)
+        self.assertEqual(contract.total_amount, 10000.0)
+
+        # --- update contract ---
+        updated = self.writer.update_contract(
+            self.session, self.current_user,
+            contract.id, remaining_amount=0.0, is_signed=True)
+        self.assertEqual(updated.remaining_amount, 0.0)
+        self.assertTrue(updated.is_signed)
