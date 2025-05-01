@@ -1,34 +1,41 @@
 """
-Les anciens tests simulaient une méthode « run » interactive qui n’existe plus.
-On valide ici les opérations CRUD couvertes auparavant, directement via
-DataWriter (la vue ne fait qu’appeler ces méthodes).
+Tests rapides : création d’un utilisateur puis d’un client & contrat,
+puis mise à jour du contrat – le tout via DataWriter (pas la vue CLI).
 """
+
 import unittest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from app.models import Base, Role, User, Client
 from app.controllers.data_writer import DataWriter
 from app.authentification.auth_controller import AuthController
 
 
-class DummyDBConnection:
+# ------------------------------------------------------------------ #
+#  Connexion factice                                                 #
+# ------------------------------------------------------------------ #
+class _DummyDB:
     def __init__(self):
         self.engine = create_engine("sqlite:///:memory:")
-        self.SessionLocal = sessionmaker(bind=self.engine)
+        self.Session = sessionmaker(bind=self.engine)
         Base.metadata.create_all(self.engine)
 
     def create_session(self):
-        return self.SessionLocal()
+        return self.Session()
 
 
+# ------------------------------------------------------------------ #
+#  Suite                                                             #
+# ------------------------------------------------------------------ #
 class TestDataWriterView(unittest.TestCase):
     def setUp(self):
-        self.db = DummyDBConnection()
+        self.db = _DummyDB()
         self.session = self.db.create_session()
         self.auth = AuthController()
         self.writer = DataWriter(self.db)
 
-        # rôles
+        # rôle « gestion »
         self.role_g = Role(id=3, name="gestion")
         self.session.add(self.role_g)
         self.session.commit()
@@ -40,7 +47,7 @@ class TestDataWriterView(unittest.TestCase):
         self.db.engine.dispose()
 
     def test_create_update_user_and_contract(self):
-        # --- create user ---
+        # ----- utilisateur -----
         user = self.writer.create_user(
             self.session, self.current_user,
             employee_number=None,
@@ -48,27 +55,36 @@ class TestDataWriterView(unittest.TestCase):
             last_name="Dupont",
             email="jp.dupont@example.com",
             password_hash=self.auth.hasher.hash("x"),
-            role_id=3)
+            role_id=3,
+        )
         self.assertTrue(user.employee_number.startswith("G"))
 
-        # --- client ---
-        client = Client(full_name="CL", email="cl@x",
-                        commercial_id=user.id)
+        # ----- client -----
+        client = Client(full_name="CL", email="cl@x", commercial_id=user.id)
         self.session.add(client)
         self.session.commit()
 
-        # --- contract ---
+        # ----- contrat -----
         contract = self.writer.create_contract(
             self.session, self.current_user,
             client_id=client.id,
-            total_amount=10000.0,
-            remaining_amount=5000.0,
-            is_signed=False)
-        self.assertEqual(contract.total_amount, 10000.0)
+            total_amount=10_000.0,
+            remaining_amount=5_000.0,
+            is_signed=False,
+        )
+        self.assertEqual(contract.total_amount, 10_000.0)
 
-        # --- update contract ---
+        # ----- mise à jour -----
         updated = self.writer.update_contract(
-            self.session, self.current_user,
-            contract.id, remaining_amount=0.0, is_signed=True)
+            self.session,
+            self.current_user,
+            contract.id,
+            remaining_amount=0.0,
+            is_signed=True,
+        )
         self.assertEqual(updated.remaining_amount, 0.0)
         self.assertTrue(updated.is_signed)
+
+
+if __name__ == "__main__":
+    unittest.main()
