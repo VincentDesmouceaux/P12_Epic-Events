@@ -69,14 +69,15 @@ class TestIntegrationWrite(unittest.TestCase):
         local_session = self.db_connection.create_session()
 
         new_user = self.data_writer.create_user(
-            local_session,
-            current_user=current_user,
+            local_session,              # 1er argument : session
+            # 2e argument : utilisateur courant  ❰ plus de « current_user=… » ❱
+            current_user,
             employee_number="EMP_INT001",
             first_name="Integration",
             last_name="User",
             email="integration.user@example.com",
-            password_hash="hashed_integration",  # Simulé
-            role_id=2  # rôle commercial
+            password_hash="hashed_integration",
+            role_id=2
         )
 
         self.assertIsNotNone(new_user, "L'utilisateur doit être créé.")
