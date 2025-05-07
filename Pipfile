@@ -12,6 +12,7 @@ pyjwt = "*"
 click = "*"
 pymysql = "*"
 coverage = "*"
+sentry-sdk = "*"
 
 [dev-packages]
 

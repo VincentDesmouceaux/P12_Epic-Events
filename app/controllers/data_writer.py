@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-DataWriter – couche « métier » (écriture) sécurisée.
+DataWriter – couche « métier » (écriture) sécurisée.
 - Aucun décorateur (@staticmethod) – tout est méthode d’instance.
 - Signatures IDENTIQUES à la version d’origine.
 - Vérifications ajoutées : e‑mail, montants positifs, restant ≤ total,
-  dates « fin ≥ début », rôle/permissions inchangés.
+  dates « fin ≥ début », rôle/permissions inchangés.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import datetime as dt
 import re
 from typing import Any, Dict, List, Optional
 
+import sentry_sdk                               # ← Sentry ajouté
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,19 @@ class DataWriter:
 
     def _debug(self, tag: str, **kv):
         print(f"[DataWriter][DEBUG] {tag} -> {kv}")
+
+    # ---------- petite aide pour envoyer des messages à Sentry -------- #
+    def _capture(self, msg: str, **ctx):
+        """
+        Envoie un « breadcrumb » ou un message INFO dans Sentry.
+        (Ne fait rien si le SDK n'est pas initialisé.)
+        """
+        if sentry_sdk.Hub.current.client is None:
+            return
+        with sentry_sdk.push_scope() as scope:
+            for k, v in ctx.items():
+                scope.set_extra(k, v)
+            sentry_sdk.capture_message(msg, level="info")
 
     # ------------------------------------------------------------------ #
     #  Permissions                                                       #
@@ -98,6 +112,13 @@ class DataWriter:
             sess.rollback()
             raise ValueError(f"Email déjà utilisé : {err}") from err
 
+        # ---- Sentry : création d’un collaborateur ------------------- #
+        self._capture(
+            "user_created",
+            user_id=user.id,
+            created_by=cur.get("id"),
+            role_id=role_id
+        )
         return user
 
     def update_user(self, sess: Session, cur: Dict[str, Any],
@@ -117,6 +138,14 @@ class DataWriter:
         for k, v in updates.items():
             setattr(usr, k, v)
         sess.commit()
+
+        # ---- Sentry : modification d’un collaborateur --------------- #
+        self._capture(
+            "user_updated",
+            user_id=usr.id,
+            updated_by=cur.get("id"),
+            changes=list(updates.keys())
+        )
         return usr
 
     def update_user_by_employee_number(self, sess: Session, cur: Dict[str, Any],
@@ -137,6 +166,14 @@ class DataWriter:
         for k, v in updates.items():
             setattr(usr, k, v)
         sess.commit()
+
+        # ---- Sentry : modification d’un collaborateur --------------- #
+        self._capture(
+            "user_updated",
+            user_id=usr.id,
+            updated_by=cur.get("id"),
+            changes=list(updates.keys())
+        )
         return usr
 
     def delete_user(self, sess: Session, cur: Dict[str, Any], employee_number: str):
@@ -250,8 +287,22 @@ class DataWriter:
         if remain > total:
             raise ValueError("Restant > total.")
 
+        # ----------- détection de la signature ----------------------- #
+        was_signed = ctr.is_signed
+        will_be_signed = updates.get("is_signed", was_signed)
+
         for k, v in updates.items():
             setattr(ctr, k, v)
+
+        # Si le contrat vient d’être signé → log Sentry
+        if (not was_signed) and will_be_signed:
+            self._capture(
+                "contract_signed",
+                contract_id=ctr.id,
+                client_id=ctr.client_id,
+                signed_by=cur.get("id")
+            )
+
         sess.commit()
         return ctr
 
