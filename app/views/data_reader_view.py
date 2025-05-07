@@ -8,7 +8,8 @@ exposées pour la CLI “commercial” :
     • display_unsigned_contracts()  – contrats non signés
     • display_unpaid_contracts()    – contrats avec reste à payer
 """
-from typing import Dict
+from __future__ import annotations
+from typing import Dict, List
 
 from app.controllers.data_reader import DataReader
 from app.views.generic_view import GenericView
@@ -16,25 +17,26 @@ from app.models.contract import Contract
 
 
 class DataReaderView(GenericView):
-    # ---------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
     def __init__(self, db_connection):
         super().__init__()
         self.db_conn = db_connection
         self.reader = DataReader(self.db_conn)
 
-    # ---------------------------------------------------------------- #
-    @staticmethod
-    def _fmt(entity) -> str:
+    # ------------------------------------------------------------------ #
+    #  Méthodes utilitaires (aucun décorateur)
+    # ------------------------------------------------------------------ #
+    def _fmt(self, entity) -> str:
         """Renvoie un dict lisible – on masque password_hash s’il existe."""
         return str({
-            c.name: getattr(entity, c.name)
-            for c in entity.__table__.columns
-            if c.name != "password_hash"
+            col.name: getattr(entity, col.name)
+            for col in entity.__table__.columns
+            if col.name != "password_hash"
         })
 
-    # ---------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
     #  LISTES GÉNÉRIQUES
-    # ---------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
     def display_clients_only(self, current_user: Dict):
         print(f"[DataReaderView][TRACE] display_clients_only {current_user}")
         with self.db_conn.create_session() as sess:
@@ -53,10 +55,10 @@ class DataReaderView(GenericView):
             for ev in self.reader.get_all_events(sess, current_user):
                 print(self._fmt(ev))
 
-    # ---------------------------------------------------------------- #
-    #  LISTES SPÉCIFIQUES (utilisées par le sous-menu “Affichage”)
-    # ---------------------------------------------------------------- #
-    def _print_contract_subset(self, title: str, contracts: list[Contract]):
+    # ------------------------------------------------------------------ #
+    #  LISTES SPÉCIFIQUES (sous‑menu “Affichage” du commercial)
+    # ------------------------------------------------------------------ #
+    def _print_contract_subset(self, title: str, contracts: List[Contract]):
         if not contracts:
             self.print_yellow(f"Aucun {title.lower()}.")
             return

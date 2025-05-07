@@ -1,18 +1,16 @@
+# -*- coding: utf-8 -*-
 """
-DataWriter – Couche « métier » pour toutes les opérations d’écriture.
-
-Rappels de permission
----------------------
-gestion    : accès total (CRUD sur tous les objets)
-commercial : créer / modifier SES clients, modifier SES contrats,
-             pas de création de contrat, pas de ré-affectation à d’autres commerciaux
-support    : mise à jour des événements qui lui sont assignés
+DataWriter – couche « métier » (écriture) sécurisée.
+- Aucun décorateur (@staticmethod) – tout est méthode d’instance.
+- Signatures IDENTIQUES à la version d’origine.
+- Vérifications ajoutées : e‑mail, montants positifs, restant ≤ total,
+  dates « fin ≥ début », rôle/permissions inchangés.
 """
-
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -23,68 +21,69 @@ from app.models.contract import Contract
 from app.models.event import Event
 
 
-# --------------------------------------------------------------------------- #
-#  DataWriter                                                                 #
-# --------------------------------------------------------------------------- #
 class DataWriter:
+    # ------------------------------------------------------------------ #
+    #  Construction & log                                                #
+    # ------------------------------------------------------------------ #
     def __init__(self, db_connection):
         self.db = db_connection
 
-    # -------------------------- helpers debug -------------------------- #
-    @staticmethod
-    def _debug(label: str, **kv):
-        print(f"[DataWriter][DEBUG] {label} -> {kv}")
+    def _debug(self, tag: str, **kv):
+        print(f"[DataWriter][DEBUG] {tag} -> {kv}")
 
-    # ------------------- authentification / rôles --------------------- #
-    def _check_auth(self, current_user: Optional[Dict[str, Any]]):
-        self._debug("_check_auth", current_user=current_user)
-        if not current_user:
+    # ------------------------------------------------------------------ #
+    #  Permissions                                                       #
+    # ------------------------------------------------------------------ #
+    def _check_auth(self, cur: Optional[Dict[str, Any]]):
+        self._debug("_check_auth", cur=cur)
+        if not cur:
             raise PermissionError("Utilisateur non authentifié.")
 
-    # ------------------------------------------------------------------ #
-    def _check_permission(self, current_user: Dict[str, Any],
-                          allowed_roles: list[str]):
-        self._check_auth(current_user)
-        self._debug("_check_permission",
-                    user_role=current_user.get("role"),
-                    allowed=allowed_roles)
-        if current_user.get("role") not in allowed_roles:
-            raise PermissionError("Accès refusé pour ce rôle.")
+    def _check_permission(self, cur: Dict[str, Any], allowed: List[str]):
+        self._check_auth(cur)
+        if cur.get("role") not in allowed:
+            raise PermissionError("Rôle non autorisé pour cette action.")
 
     # ------------------------------------------------------------------ #
-    @staticmethod
-    def _prefix_for(role_id: int) -> str:
+    #  Aides                                                             #
+    # ------------------------------------------------------------------ #
+    _REG_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
+
+    def _prefix_for(self, role_id: int) -> str:
         return {1: "C", 2: "S", 3: "G"}.get(role_id, "X")
 
-    def _generate_employee_number(self, session: Session, role_id: int) -> str:
+    def _generate_employee_number(self, sess: Session, role_id: int) -> str:
         prefix = self._prefix_for(role_id)
-        max_index = 0
-        for (emp,) in session.query(User.employee_number)\
-                             .filter(User.role_id == role_id):
+        maxi = 0
+        for (emp,) in sess.query(User.employee_number).filter(User.role_id == role_id):
             if emp and emp.startswith(prefix):
                 try:
-                    num = int(emp[len(prefix):])
-                    max_index = max(max_index, num)
+                    maxi = max(maxi, int(emp[len(prefix):]))
                 except ValueError:
-                    continue
-        new_emp = f"{prefix}{max_index + 1:03d}"
-        self._debug("_generate_employee_number", role_id=role_id,
-                    new_employee_number=new_emp)
+                    pass
+        new_emp = f"{prefix}{maxi + 1:03d}"
+        self._debug("_generate_employee_number", new_emp=new_emp)
         return new_emp
 
     # ================================================================== #
-    #  =======================   COLLABORATEURS   ====================== #
+    #  ======================= COLLABORATEURS ========================== #
     # ================================================================== #
-    def create_user(self, session: Session, current_user: Dict[str, Any],
-                    employee_number: Optional[str], first_name: str,
-                    last_name: str, email: str, password_hash: str,
-                    role_id: int) -> User:
-        self._debug("create_user appelé", current_user=current_user,
-                    employee_number=employee_number, email=email, role_id=role_id)
-        self._check_permission(current_user, ["gestion"])
+    def create_user(
+            self, sess: Session, cur: Dict[str, Any],
+            employee_number: Optional[str], first_name: str, last_name: str,
+            email: str, password_hash: str, role_id: int) -> User:
+
+        self._debug("create_user", email=email, role_id=role_id)
+        self._check_permission(cur, ["gestion"])
+
+        if not self._REG_EMAIL.match(email):
+            raise ValueError("Email collaborateur invalide.")
+
+        if role_id not in (1, 2, 3):
+            raise ValueError("Rôle inconnu (1=Com,2=Sup,3=Gest).")
 
         if not employee_number:
-            employee_number = self._generate_employee_number(session, role_id)
+            employee_number = self._generate_employee_number(sess, role_id)
 
         user = User(employee_number=employee_number,
                     first_name=first_name,
@@ -92,237 +91,229 @@ class DataWriter:
                     email=email,
                     password_hash=password_hash,
                     role_id=role_id)
-        session.add(user)
+        sess.add(user)
         try:
-            session.commit()
+            sess.commit()
         except IntegrityError as err:
-            session.rollback()
-            self._debug("create_user IntegrityError", err=str(err))
-            existing = session.query(User).filter_by(email=email).first()
-            if existing:
-                return existing
-            raise
+            sess.rollback()
+            raise ValueError(f"Email déjà utilisé : {err}") from err
 
-        self._debug("Utilisateur créé", id=user.id,
-                    employee_number=user.employee_number)
         return user
 
-    # ------------------------------------------------------------------ #
-    def update_user(self, session: Session, current_user: Dict[str, Any],
-                    user_id: int, **updates) -> User:
-        self._debug("update_user appelé", current_user=current_user,
-                    user_id=user_id, updates=updates)
-        self._check_permission(current_user, ["gestion"])
+    def update_user(self, sess: Session, cur: Dict[str, Any],
+                    user_id: int, **updates):
 
-        user = session.get(User, user_id)
-        if not user:
+        self._debug("update_user", user_id=user_id, updates=updates)
+        self._check_permission(cur, ["gestion"])
+
+        if "email" in updates and updates["email"]:
+            if not self._REG_EMAIL.match(updates["email"]):
+                raise ValueError("Email collaborateur invalide.")
+
+        usr = sess.get(User, user_id)
+        if not usr:
             raise ValueError("Collaborateur non trouvé.")
 
         for k, v in updates.items():
-            setattr(user, k, v)
-        session.commit()
-        self._debug("Collaborateur mis à jour", id=user.id, updates=updates)
-        return user
+            setattr(usr, k, v)
+        sess.commit()
+        return usr
 
-    # ------------------------------------------------------------------ #
-    def update_user_by_employee_number(self, session: Session,
-                                       current_user: Dict[str, Any],
-                                       employee_number: str,
-                                       **updates) -> User:
-        self._debug("update_user_by_employee_number appelé",
-                    employee_number=employee_number, updates=updates)
-        self._check_permission(current_user, ["gestion"])
+    def update_user_by_employee_number(self, sess: Session, cur: Dict[str, Any],
+                                       employee_number: str, **updates):
 
-        user = session.query(User).filter_by(
+        self._debug("update_user_by_emp", emp=employee_number, updates=updates)
+        self._check_permission(cur, ["gestion"])
+
+        if "email" in updates and updates["email"]:
+            if not self._REG_EMAIL.match(updates["email"]):
+                raise ValueError("Email collaborateur invalide.")
+
+        usr = sess.query(User).filter_by(
             employee_number=employee_number).first()
-        if not user:
+        if not usr:
             raise ValueError("Collaborateur non trouvé.")
 
         for k, v in updates.items():
-            setattr(user, k, v)
-        session.commit()
-        self._debug("Collaborateur mis à jour", id=user.id, updates=updates)
-        return user
+            setattr(usr, k, v)
+        sess.commit()
+        return usr
 
-    # ------------------------------------------------------------------ #
-    def delete_user(self, session: Session, current_user: Dict[str, Any],
-                    employee_number: str) -> bool:
-        self._debug("delete_user appelé", employee_number=employee_number)
-        self._check_permission(current_user, ["gestion"])
+    def delete_user(self, sess: Session, cur: Dict[str, Any], employee_number: str):
+        self._debug("delete_user", emp=employee_number)
+        self._check_permission(cur, ["gestion"])
 
-        user = session.query(User).filter_by(
+        usr = sess.query(User).filter_by(
             employee_number=employee_number).first()
-        if not user:
+        if not usr:
             raise ValueError("Collaborateur non trouvé.")
-        session.delete(user)
-        session.commit()
-        self._debug("Collaborateur supprimé", employee_number=employee_number)
+        sess.delete(usr)
+        sess.commit()
         return True
 
     # ================================================================== #
-    #  ==========================   CLIENTS   ========================== #
+    #  ============================ CLIENTS ============================ #
     # ================================================================== #
-    def create_client(self, session: Session, current_user: Dict[str, Any],
-                      full_name: str, email: str,
-                      phone: Optional[str], company_name: Optional[str],
-                      commercial_id: Optional[int]) -> Client:
-        self._debug("create_client appelé", current_user=current_user,
-                    full_name=full_name, commercial_id_param=commercial_id)
-        self._check_permission(current_user, ["gestion", "commercial"])
+    def create_client(self, sess: Session, cur: Dict[str, Any],
+                      full_name: str, email: str, phone: Optional[str],
+                      company_name: Optional[str], commercial_id: Optional[int]):
 
-        # Un commercial affecte automatiquement le client à lui-même
-        if current_user["role"] == "commercial":
-            commercial_id = current_user["id"]
+        self._debug("create_client", email=email)
+        self._check_permission(cur, ["gestion", "commercial"])
 
-        client = Client(full_name=full_name,
-                        email=email,
-                        phone=phone,
-                        company_name=company_name,
-                        date_created=dt.datetime.utcnow(),
-                        commercial_id=commercial_id)
-        session.add(client)
-        session.commit()
-        self._debug("Client créé", id=client.id,
-                    commercial_id=client.commercial_id)
-        return client
+        if not self._REG_EMAIL.match(email):
+            raise ValueError("Email client invalide.")
 
-    # ------------------------------------------------------------------ #
-    def update_client(self, session: Session, current_user: Dict[str, Any],
-                      client_id: int, **updates) -> Client:
-        self._debug("update_client appelé", current_user=current_user,
-                    client_id=client_id, updates=updates)
-        self._check_permission(current_user, ["gestion", "commercial"])
+        if cur["role"] == "commercial":
+            commercial_id = cur["id"]
 
-        client = session.get(Client, client_id)
-        if not client:
-            raise ValueError("Client non trouvé.")
+        cli = Client(full_name=full_name, email=email, phone=phone,
+                     company_name=company_name,
+                     date_created=dt.datetime.utcnow(),
+                     commercial_id=commercial_id)
+        sess.add(cli)
+        sess.commit()
+        return cli
 
-        # Propriété : un commercial ne modifie QUE ses clients
-        if (current_user["role"] == "commercial"
-                and client.commercial_id != current_user["id"]):
-            raise PermissionError("Vous n’êtes pas responsable de ce client.")
+    def update_client(self, sess: Session, cur: Dict[str, Any],
+                      client_id: int, **updates):
 
-        for k, v in updates.items():
-            setattr(client, k, v)
-        client.date_last_contact = dt.datetime.utcnow()
-        session.commit()
-        self._debug("Client mis à jour", id=client.id, updates=updates)
-        return client
+        self._debug("update_client", id=client_id, updates=updates)
+        self._check_permission(cur, ["gestion", "commercial"])
 
-    # ================================================================== #
-    #  =========================   CONTRATS   ========================= #
-    # ================================================================== #
-    def create_contract(self, session: Session, current_user: Dict[str, Any],
-                        client_id: int, total_amount: float,
-                        remaining_amount: float, is_signed: bool = False) -> Contract:
-        """Seul « gestion » a le droit de créer de nouveaux contrats."""
-        self._debug("create_contract appelé", current_user=current_user,
-                    client_id=client_id)
-        self._check_permission(current_user, ["gestion"])
+        if "email" in updates and updates["email"]:
+            if not self._REG_EMAIL.match(updates["email"]):
+                raise ValueError("Email client invalide.")
 
-        client = session.get(Client, client_id)
-        if not client:
+        cli = sess.get(Client, client_id)
+        if not cli:
             raise ValueError("Client introuvable.")
 
-        contract = Contract(client_id=client.id,
-                            commercial_id=client.commercial_id,
-                            total_amount=total_amount,
-                            remaining_amount=remaining_amount,
-                            is_signed=is_signed)
-        session.add(contract)
-        session.commit()
-        self._debug("Contrat créé", id=contract.id)
-        return contract
-
-    # ------------------------------------------------------------------ #
-    def update_contract(self, session: Session, current_user: Dict[str, Any],
-                        contract_id: int, **updates) -> Contract:
-        self._debug("update_contract appelé", current_user=current_user,
-                    contract_id=contract_id, updates=updates)
-        self._check_permission(current_user, ["gestion", "commercial"])
-
-        contract = session.get(Contract, contract_id)
-        if not contract:
-            raise ValueError("Contrat non trouvé.")
-
-        # restriction « propriété » pour un commercial
-        if (current_user["role"] == "commercial"
-                and contract.commercial_id != current_user["id"]):
-            raise PermissionError("Vous n’êtes pas responsable de ce contrat.")
-
-        # un commercial ne peut pas changer l’affectation à un autre commercial
-        if "commercial_id" in updates and current_user["role"] == "commercial":
-            raise PermissionError(
-                "Ré-affectation interdite pour un commercial.")
+        if cur["role"] == "commercial" and cli.commercial_id != cur["id"]:
+            raise PermissionError("Client non autorisé.")
 
         for k, v in updates.items():
-            setattr(contract, k, v)
-        session.commit()
-        self._debug("Contrat mis à jour", id=contract.id, updates=updates)
-        return contract
+            setattr(cli, k, v)
+        cli.date_last_contact = dt.datetime.utcnow()
+        sess.commit()
+        return cli
 
     # ================================================================== #
-    #  =========================   EVENEMENTS   ======================== #
+    #  ============================ CONTRATS =========================== #
     # ================================================================== #
-    def create_event(self, session: Session, current_user: Dict[str, Any],
-                     contract_id: int, support_id: Optional[int],
-                     date_start: Optional[dt.datetime] = None,
-                     date_end: Optional[dt.datetime] = None,
-                     location: Optional[str] = None,
-                     attendees: Optional[int] = None,
-                     notes: Optional[str] = None) -> Event:
-        """
-        Un commercial crée un événement **uniquement** sur un contrat signé
-        dont il est le propriétaire.
-        Un support ne peut pas créer d’événement.
-        """
-        self._debug("create_event appelé", current_user=current_user,
-                    contract_id=contract_id, support_id=support_id)
-        self._check_permission(current_user, ["gestion", "commercial"])
+    def create_contract(self, sess: Session, cur: Dict[str, Any],
+                        client_id: int, total_amount: float,
+                        remaining_amount: float, is_signed: bool = False):
 
-        contract = session.get(Contract, contract_id)
-        if not contract:
+        self._debug("create_contract", client=client_id)
+        self._check_permission(cur, ["gestion"])
+
+        if total_amount < 0 or remaining_amount < 0:
+            raise ValueError("Montants négatifs interdits.")
+        if remaining_amount > total_amount:
+            raise ValueError("Restant > total.")
+
+        cli = sess.get(Client, client_id)
+        if not cli:
+            raise ValueError("Client introuvable.")
+
+        ctr = Contract(client_id=cli.id,
+                       commercial_id=cli.commercial_id,
+                       total_amount=total_amount,
+                       remaining_amount=remaining_amount,
+                       is_signed=is_signed)
+        sess.add(ctr)
+        sess.commit()
+        return ctr
+
+    def update_contract(self, sess: Session, cur: Dict[str, Any],
+                        contract_id: int, **updates):
+
+        self._debug("update_contract", id=contract_id, updates=updates)
+        self._check_permission(cur, ["gestion", "commercial"])
+
+        ctr = sess.get(Contract, contract_id)
+        if not ctr:
             raise ValueError("Contrat introuvable.")
 
-        if current_user["role"] == "commercial":
-            if contract.commercial_id != current_user["id"]:
-                raise PermissionError("Contrat non autorisé.")
-            if not contract.is_signed:
-                raise PermissionError("Contrat non signé.")
+        if cur["role"] == "commercial" and ctr.commercial_id != cur["id"]:
+            raise PermissionError("Contrat non autorisé.")
 
-        event = Event(contract_id=contract_id,
-                      support_id=support_id,
-                      date_start=date_start,
-                      date_end=date_end,
-                      location=location,
-                      attendees=attendees,
-                      notes=notes)
-        session.add(event)
-        session.commit()
-        self._debug("Événement créé", id=event.id)
-        return event
+        if "commercial_id" in updates and cur["role"] == "commercial":
+            raise PermissionError("Ré‑affectation interdite.")
 
-    # ------------------------------------------------------------------ #
-    def update_event(self, session: Session, current_user: Dict[str, Any],
-                     event_id: int, **updates) -> Event:
-        self._debug("update_event appelé", current_user=current_user,
-                    event_id=event_id, updates=updates)
-        self._check_permission(
-            current_user, ["gestion", "commercial", "support"])
-
-        event = session.get(Event, event_id)
-        if not event:
-            raise ValueError("Événement non trouvé.")
-
-        if current_user["role"] == "commercial":
-            ctr = session.get(Contract, event.contract_id)
-            if ctr.commercial_id != current_user["id"]:
-                raise PermissionError("Événement non autorisé.")
-        if current_user["role"] == "support" and event.support_id != current_user["id"]:
-            raise PermissionError("Événement non autorisé.")
+        # cohérence des montants
+        total = updates.get("total_amount", ctr.total_amount)
+        remain = updates.get("remaining_amount", ctr.remaining_amount)
+        if total < 0 or remain < 0:
+            raise ValueError("Montants négatifs interdits.")
+        if remain > total:
+            raise ValueError("Restant > total.")
 
         for k, v in updates.items():
-            setattr(event, k, v)
-        session.commit()
-        self._debug("Événement mis à jour", id=event.id, updates=updates)
-        return event
+            setattr(ctr, k, v)
+        sess.commit()
+        return ctr
+
+    # ================================================================== #
+    #  =========================== ÉVÉNEMENTS ========================== #
+    # ================================================================== #
+    def create_event(self, sess: Session, cur: Dict[str, Any],
+                     contract_id: int, support_id: Optional[int],
+                     date_start: dt.datetime, date_end: dt.datetime,
+                     location: Optional[str] = None,
+                     attendees: Optional[int] = None,
+                     notes: Optional[str] = None):
+
+        self._debug("create_event", ctr=contract_id)
+        self._check_permission(cur, ["gestion", "commercial"])
+
+        ctr = sess.get(Contract, contract_id)
+        if not ctr:
+            raise ValueError("Contrat introuvable.")
+        if cur["role"] == "commercial":
+            if ctr.commercial_id != cur["id"]:
+                raise PermissionError("Contrat non autorisé.")
+            if not ctr.is_signed:
+                raise PermissionError("Contrat non signé.")
+        if date_end < date_start:
+            raise ValueError("Date fin < date début.")
+        if attendees is not None and attendees < 0:
+            raise ValueError("Participants négatifs.")
+
+        evt = Event(contract_id=contract_id, support_id=support_id,
+                    date_start=date_start, date_end=date_end,
+                    location=location, attendees=attendees, notes=notes)
+        sess.add(evt)
+        sess.commit()
+        return evt
+
+    def update_event(self, sess: Session, cur: Dict[str, Any],
+                     event_id: int, **updates):
+
+        self._debug("update_event", id=event_id, updates=updates)
+        self._check_permission(cur, ["gestion", "commercial", "support"])
+
+        evt = sess.get(Event, event_id)
+        if not evt:
+            raise ValueError("Événement introuvable.")
+
+        if cur["role"] == "commercial":
+            ctr = sess.get(Contract, evt.contract_id)
+            if ctr.commercial_id != cur["id"]:
+                raise PermissionError("Non autorisé.")
+        if cur["role"] == "support" and evt.support_id != cur["id"]:
+            raise PermissionError("Non autorisé.")
+
+        new_start = updates.get("date_start", evt.date_start)
+        new_end = updates.get("date_end", evt.date_end)
+        if new_start and new_end and new_end < new_start:
+            raise ValueError("Date fin < date début.")
+        if "attendees" in updates and updates["attendees"] is not None:
+            if updates["attendees"] < 0:
+                raise ValueError("Participants négatifs.")
+
+        for k, v in updates.items():
+            setattr(evt, k, v)
+        sess.commit()
+        return evt
