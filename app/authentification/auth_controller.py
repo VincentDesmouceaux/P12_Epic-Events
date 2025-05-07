@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 Gestion de l’authentification, du hachage des mots de passe et des
-jetons **JWT** pour l’application Epic Events.
+jetons **JWT** pour l’application Epic Events.
 
-Fonctions principales :
+Fonctions principales :
     • Enregistrer un collaborateur avec mot de passe chiffré (`register_user`)
     • Authentifier un utilisateur et retourner l’objet SQLAlchemy (`authenticate_user`)
     • Générer un JWT signé (`generate_token`)
@@ -39,7 +39,7 @@ class AuthController:
         Clé secrète utilisée pour signer les JWT (``JWT_SECRET`` dans le
         ``.env`` ou valeur par défaut moins sûre).
     jwt_algorithm : str
-        Algorithme de signature (par défaut « HS256 »).
+        Algorithme de signature (par défaut « HS256 »).
     jwt_expiration_minutes : int
         Durée de validité des jetons générés, en minutes
         (``JWT_EXPIRATION_MINUTES`` dans le ``.env`` ou 60).
@@ -146,8 +146,8 @@ class AuthController:
             "user_id": user.id,
             "email": user.email,
             "role": user.role.name,
-            "exp": dt.datetime.utcnow()
-            + dt.timedelta(minutes=self.jwt_expiration_minutes),
+            "exp": dt.datetime.utcnow() +
+            dt.timedelta(minutes=self.jwt_expiration_minutes),
         }
         token: Union[str, bytes] = jwt.encode(
             payload, self.jwt_secret, algorithm=self.jwt_algorithm

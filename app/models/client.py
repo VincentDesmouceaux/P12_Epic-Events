@@ -1,4 +1,4 @@
-"""Modèle « Client ».
+"""Modèle « Client ».
 
 Représente une entité cliente gérée par un commercial.
 """

@@ -2,13 +2,13 @@
 """
 Jeu de données de démonstration.
 
-Insère :
+Insère :
 
-* 3 rôles : « commercial », « support », « gestion »
+* 3 rôles : « commercial », « support », « gestion »
 * 5 utilisateurs (3 commerciaux, 1 support, 1 gestion)
 * 3 clients (un par commercial)
 * 7 contrats (signés ou non, payés ou non)
-* 1 événement « avec support » et 1 « sans support » pour chaque contrat
+* 1 événement « avec support » et 1 « sans support » pour chaque contrat
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ def seed_db() -> None:
             session, Role, {"description": desc}, name=name
         )
         if created:
-            print(f"Rôle « {name} » inséré (ID={roles[name].id})")
+            print(f"Rôle « {name} » inséré (ID={roles[name].id})")
 
     # ---------------------- 2. Utilisateurs ------------------------------ #
     user_defs: Tuple[Tuple[str, str, str, str, str, str], ...] = (
@@ -116,7 +116,7 @@ def seed_db() -> None:
             email=mail,
         )
         if created:
-            print(f"Utilisateur « {mail} » inséré (ID={user.id})")
+            print(f"Utilisateur « {mail} » inséré (ID={user.id})")
         users[emp] = user
 
     # ------------------------- 3. Clients -------------------------------- #
@@ -140,24 +140,24 @@ def seed_db() -> None:
             email=mail,
         )
         if created:
-            print(f"Client « {full_name} » inséré (ID={client.id})")
+            print(f"Client « {full_name} » inséré (ID={client.id})")
         clients[client.id] = client
 
     # ------------------------- 4. Contrats ------------------------------- #
     contracts: list[Contract] = []
 
-    # 4‑A : 1 contrat principal non signé / client
+    # 4‑A : 1 contrat principal non signé / client
     for cl in clients.values():
         contracts.append(_create_contract(
             session, cl, 20_000.0, 10_000.0, False))
 
-    # 4‑B : 2 contrats supplémentaires non signés
+    # 4‑B : 2 contrats supplémentaires non signés
     for i in range(2):
         cl = list(clients.values())[i % len(clients)]
         contracts.append(_create_contract(
             session, cl, 15_000.0, 15_000.0, False))
 
-    # 4‑C : 2 contrats partiellement payés (signés)
+    # 4‑C : 2 contrats partiellement payés (signés)
     for i in range(2):
         cl = list(clients.values())[-(i + 1)]
         contracts.append(_create_contract(

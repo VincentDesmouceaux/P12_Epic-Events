@@ -4,7 +4,7 @@
 Gestion de la configuration et de la connexion à la base de données.
 
 Ce module lit les variables d’environnement définies dans le fichier
-```.env``` pour construire l’URL SQLAlchemy de connexion, puis propose :
+```.env``` pour construire l’URL SQLAlchemy de connexion, puis propose :
 
 * **DatabaseConfig** – objet léger qui stocke la configuration.
 * **DatabaseConnection** – fabrique d’engine et de sessions SQLAlchemy.
@@ -27,7 +27,7 @@ class DatabaseConfig:
     """
     Lecture et stockage de la configuration liée à la base de données.
 
-    Les variables attendues dans le fichier ```.env``` :
+    Les variables attendues dans le fichier ```.env``` :
 
     * **DB_ENGINE**   – ex. ``mysql+pymysql`` ou ``sqlite``  
     * **DB_USER**     – nom d’utilisateur SQL  
@@ -81,7 +81,7 @@ class DatabaseConnection:
             echo=False,                 # pas de SQL en sortie standard
         )
 
-        # Fabrique de sessions (« sessionmaker »)
+        # Fabrique de sessions (« sessionmaker »)
         self.SessionLocal = sessionmaker(
             autocommit=False,
             autoflush=False,
@@ -89,7 +89,7 @@ class DatabaseConnection:
         )
 
     # ------------------------------------------------------------------
-    # API public
+    # API public
     # ------------------------------------------------------------------
     def create_session(self):
         """

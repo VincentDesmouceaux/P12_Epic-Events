@@ -1,6 +1,6 @@
 # tests/testintegration/test_integration_write.py
 # ==============================================================
-# Tests d’intégration : vérifie, sur une vraie base de données
+# Tests d’intégration : vérifie, sur une vraie base de données
 # définie dans .env, que les opérations d’écriture fonctionnent
 # correctement (créations, mises à jour, relations).
 # ==============================================================
@@ -13,9 +13,7 @@ from app.config.database import DatabaseConfig, DatabaseConnection
 from app.models import Base
 from app.models.role import Role
 from app.models.user import User
-from app.models.client import Client
-from app.models.contract import Contract
-from app.models.event import Event
+
 from app.controllers.data_writer import DataWriter
 
 
@@ -24,9 +22,9 @@ class TestIntegrationWrite(unittest.TestCase):
     Batteries de tests d’intégration pour la couche DataWriter.
 
     Chaque test :
-        • se connecte à la base MySQL renseignée dans le fichier .env ;
-        • crée (ou ré‑initialise) le schéma complet ;
-        • effectue une ou plusieurs opérations d’écriture ;
+        • se connecte à la base MySQL renseignée dans le fichier .env ;
+        • crée (ou ré‑initialise) le schéma complet ;
+        • effectue une ou plusieurs opérations d’écriture ;
         • vérifie par requête directe que la base reflète bien l’action.
     """
 
@@ -42,7 +40,7 @@ class TestIntegrationWrite(unittest.TestCase):
         Base.metadata.create_all(bind=self.db_connection.engine)
         self.session = self.db_connection.create_session()
 
-        # S’assure que le rôle « commercial » (id = 2) existe.
+        # S’assure que le rôle « commercial » (id = 2) existe.
         if not self.session.query(Role).filter_by(id=2).first():
             self.session.add(Role(id=2, name="commercial",
                                   description="Role for integration tests"))
@@ -91,9 +89,9 @@ class TestIntegrationWrite(unittest.TestCase):
 
     def test_create_contract_in_mysql(self) -> None:
         """
-        • Crée un commercial ;
-        • Crée un client lié ;
-        • Crée un contrat puis le met à jour ;
+        • Crée un commercial ;
+        • Crée un client lié ;
+        • Crée un contrat puis le met à jour ;
         • Vérifie chaque étape.
         """
         local_session = self.db_connection.create_session()
@@ -147,7 +145,7 @@ class TestIntegrationWrite(unittest.TestCase):
 
     def test_update_event_assign_by_employee_number(self) -> None:
         """
-        Crée un contrat + événement sans support, puis assigne un support
+        Crée un contrat + événement sans support, puis assigne un support
         identifié par son *employee_number*.
         """
         local_session = self.db_connection.create_session()
@@ -197,7 +195,7 @@ class TestIntegrationWrite(unittest.TestCase):
             notes="Initial event without support"
         )
 
-        # Récupération ou création du support « S001 »
+        # Récupération ou création du support « S001 »
         support = local_session.query(User).filter_by(
             employee_number="S001").first()
         if not support:

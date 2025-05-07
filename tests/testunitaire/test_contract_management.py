@@ -1,7 +1,7 @@
 """
 Tests unitaires – création et mise à jour de contrats (DataWriter).
 
-On utilise une base SQLite en mémoire ; aucun accès MySQL n’est requis.
+On utilise une base SQLite en mémoire ; aucun accès MySQL n’est requis.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ class ContractManagementTestCase(unittest.TestCase):
         self.assertEqual(contract.commercial_id, self.client.commercial_id)
 
     def test_update_contract(self) -> None:
-        """Mise à jour : passage du restant à zéro et signature."""
+        """Mise à jour : passage du restant à zéro et signature."""
         contract = self.writer.create_contract(
             self.session, self.current_user,
             client_id=self.client.id,

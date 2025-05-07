@@ -2,7 +2,7 @@
 Tests permissions & filtres (DataReader / DataWriter).
 
 On crée trois rôles, trois utilisateurs, un client, un contrat signé
-et un événement ; puis on vérifie :
+et un événement ; puis on vérifie :
 
     • les filtres DataReader pour un commercial,
     • l’accès complet pour le support,

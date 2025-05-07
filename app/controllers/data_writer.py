@@ -3,25 +3,25 @@
 DataWriter
 ----------
 
-Couche *métier* « écriture » responsable de la création et de la
+Couche *métier* « écriture » responsable de la création et de la
 modification des entités *User*, *Client*, *Contract* et *Event*.
 
-Garanties principales :
+Garanties principales :
 
-* **Validation métier** :  
-  - adresses e‑mail valides ;  
-  - montants positifs et *remaining ≤ total* ;  
-  - cohérence des dates (*end* ≥ *start*) ;  
+* **Validation métier** :  
+  - adresses e‑mail valides ;  
+  - montants positifs et *remaining ≤ total* ;  
+  - cohérence des dates (*end* ≥ *start*) ;  
   - respect des règles de droits selon le rôle connecté (*gestion*,
     *commercial* ou *support*).
 
-* **Observabilité** :  
+* **Observabilité** :  
   Des points clés (création / modification de collaborateurs, signature
   d’un contrat) sont envoyés à Sentry via :py:meth:`_capture`.  
   Aucune action n’est entreprise si le SDK n’est pas initialisé.
 
 !!! note
-    Aucun décorateur n’est présent ; toutes les méthodes sont des
+    Aucun décorateur n’est présent ; toutes les méthodes sont des
     méthodes d’instance.
 """
 from __future__ import annotations
@@ -155,7 +155,7 @@ class DataWriter:
             sess.commit()
         except IntegrityError as err:
             sess.rollback()
-            raise ValueError(f"Email déjà utilisé : {err}") from err
+            raise ValueError(f"Email déjà utilisé : {err}") from err
 
         self._capture("user_created", user_id=user.id, created_by=cur["id"])
         return user
@@ -356,8 +356,8 @@ class DataWriter:
             raise ValueError("Contrat introuvable.")
 
         if (
-            cur["role"] == "commercial"
-            and contract.commercial_id != cur["id"]
+            cur["role"] == "commercial" and
+            contract.commercial_id != cur["id"]
         ):
             raise PermissionError("Contrat non autorisé.")
         if "commercial_id" in updates and cur["role"] == "commercial":
@@ -461,9 +461,9 @@ class DataWriter:
             raise ValueError("Date fin < date début.")
 
         if (
-            "attendees" in updates
-            and updates["attendees"] is not None
-            and updates["attendees"] < 0
+            "attendees" in updates and
+            updates["attendees"] is not None and
+            updates["attendees"] < 0
         ):
             raise ValueError("Participants négatifs.")
 

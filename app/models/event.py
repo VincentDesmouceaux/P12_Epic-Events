@@ -1,6 +1,6 @@
-"""Modèle « Event ».
+"""Modèle « Event ».
 
-Un événement (prestations Epic Events) est toujours adossé à un contrat.
+Un événement (prestations Epic Events) est toujours adossé à un contrat.
 Il peut être pris en charge par un collaborateur *support*.
 """
 

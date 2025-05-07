@@ -1,7 +1,7 @@
 # tests/testunitaire/test_cli_commercial_flow.py
 """Parcours complet du sous‑menu “Gestion” pour un utilisateur *commercial*.
 
-But :
+But :
     • S’assurer qu’aucune exception n’est levée.
     • Chaque sous‑menu (clients, contrats, événements) est visité au moins
       une fois.

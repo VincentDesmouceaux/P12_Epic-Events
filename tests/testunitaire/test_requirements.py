@@ -1,7 +1,7 @@
 # tests/testunitaire/test_requirements.py
 # -*- coding: utf-8 -*-
 """
-Tests d’acceptation – validation des « requirements » généraux.
+Tests d’acceptation – validation des « requirements » généraux.
 
 Couvre :
     • création et authentification d’utilisateurs ;
@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.models import Base
 from app.models.role import Role
-from app.models.user import User
+
 from app.models.client import Client
 from app.models.contract import Contract
 from app.models.event import Event
@@ -71,7 +71,7 @@ class RequirementsTestCase(unittest.TestCase):
     # TESTS                                                              #
     # ------------------------------------------------------------------ #
     def test_general_requirements(self):
-        """Vérifie la chaîne complète : user → client → contrat → évènement."""
+        """Vérifie la chaîne complète : user → client → contrat → évènement."""
         user = self.auth_controller.register_user(
             self.session,
             employee_number="GEN001",

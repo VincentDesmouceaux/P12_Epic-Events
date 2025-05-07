@@ -1,18 +1,17 @@
 """
 Tests basiques de la couche DatabaseConnection.
 
-• Création d’une session SQLAlchemy ;
+• Création d’une session SQLAlchemy ;
 • exécution d’un `SELECT 1` pour vérifier la connectivité.
 """
 
 from __future__ import annotations
 
 import unittest
-from sqlalchemy import text, create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
+
 
 from app.config.database import DatabaseConfig, DatabaseConnection
-from app.models import Base
 
 
 class TestDatabaseConnection(unittest.TestCase):

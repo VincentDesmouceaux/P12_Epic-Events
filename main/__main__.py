@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Point d’entrée de l’application : ``python -m main``
+Point d’entrée de l’application : ``python -m main``
 
-Enchaîne, dans l’ordre :
+Enchaîne, dans l’ordre :
 1. Initialisation de Sentry (si un DSN est présent dans le `.env`).
 2. Éventuels tests Sentry déclenchés par la variable d’environnement
-   ``SENTRY_TEST`` :
-   * ``ping``  → envoi d’un simple message au niveau *error* ;
-   * ``1``    → capture d’une `ZeroDivisionError`.
+   ``SENTRY_TEST`` :
+   * ``ping``  → envoi d’un simple message au niveau *error* ;
+   * ``1``    → capture d’une `ZeroDivisionError`.
 3. Création du schéma SQL et population de données de démonstration.
 4. Lancement de l’interface CLI.
 """
@@ -15,7 +15,7 @@ Enchaîne, dans l’ordre :
 from __future__ import annotations
 
 import os
-from pathlib import Path  # conservé pour montrer que l’import fonctionne
+
 
 # --- dépendances internes ------------------------------------------------- #
 from .init_db import init_db
@@ -38,10 +38,10 @@ if _sentry_flag == "ping":
     import sentry_sdk
     from datetime import datetime as _dt
 
-    print("[SENTRY TEST] Envoi d’un « ping » vers Sentry…")
+    print("[SENTRY TEST] Envoi d’un « ping » vers Sentry…")
     sentry_sdk.capture_message(
         f"Sentry ping {_dt.utcnow()}",
-        level="error",            # visible dans l’onglet « Issues »
+        level="error",            # visible dans l’onglet « Issues »
     )
     sentry_sdk.flush(timeout=5.0)
 
@@ -55,7 +55,7 @@ elif _sentry_flag == "1":
         # on capture manuellement pour garantir l’envoi
         sentry_sdk.capture_exception()
         sentry_sdk.flush(timeout=5.0)
-        # on ne relance pas l’exception : l’application peut poursuivre
+        # on ne relance pas l’exception : l’application peut poursuivre
 
 
 # ------------------------------------------------------------------------- #
@@ -64,7 +64,7 @@ elif _sentry_flag == "1":
 def main() -> None:
     """
     Crée (ou recrée) les tables, charge un jeu de données de démonstration
-    puis lance l’interface CLI Epic Events.
+    puis lance l’interface CLI Epic Events.
     """
     print("→ Initialisation de la base de données…")
     init_db()
@@ -72,7 +72,7 @@ def main() -> None:
     print("\n→ Chargement des données d'exemple…")
     seed_db()
 
-    print("\n→ Lancement de l'interface CLI Epic Events\n")
+    print("\n→ Lancement de l'interface CLI Epic Events\n")
     cfg = DatabaseConfig()
     conn = DatabaseConnection(cfg)
     CLIInterface(conn).run()

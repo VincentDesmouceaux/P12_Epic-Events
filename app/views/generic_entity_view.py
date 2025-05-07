@@ -3,7 +3,7 @@
 """
 Vue utilitaire ─ formatage d’un objet SQLAlchemy pour l’affichage CLI.
 
-Le but est d’obtenir rapidement une représentation lisible d’une entité :
+Le but est d’obtenir rapidement une représentation lisible d’une entité :
     >>> view = GenericEntityView()
     >>> print(view.format_entity(user))
     id=1, email=john@doe.io, role_id=3
@@ -11,14 +11,14 @@ Le but est d’obtenir rapidement une représentation lisible d’une entité 
 
 
 class GenericEntityView:
-    """Fournit un unique helper : :pymeth:`format_entity`."""
+    """Fournit un unique helper : :pymeth:`format_entity`."""
 
     # --------------------------------------------------------------------- #
     # Public API
     # --------------------------------------------------------------------- #
     def format_entity(self, entity):
         """
-        Convertit une instance SQLAlchemy en chaîne « clé=val, … ».
+        Convertit une instance SQLAlchemy en chaîne « clé=val, … ».
 
         *Si* l’objet ne possède pas d’attribut ``__table__`` (ce n’est donc
         pas une entité SQLAlchemy), sa représentation ``str`` brute est
@@ -37,14 +37,14 @@ class GenericEntityView:
         try:
             columns = entity.__table__.columns.keys()
         except AttributeError:
-            # objet lambda : on se rabat sur str(x)
+            # objet lambda : on se rabat sur str(x)
             return str(entity)
 
         values = {}
         for col in columns:
             try:
                 values[col] = getattr(entity, col)
-            except Exception:            # pragma: no cover — champ inaccessible
+            except Exception:            # pragma: no cover — champ inaccessible
                 values[col] = "Inaccessible"
 
         return ", ".join(f"{col}={value}" for col, value in values.items())

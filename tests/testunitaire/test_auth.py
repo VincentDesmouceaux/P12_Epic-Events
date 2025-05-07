@@ -1,7 +1,7 @@
 # tests/testunitaire/test_auth.py
 """Tests unitaires du contrôleur d’authentification.
 
-Objectifs :
+Objectifs :
     • Vérifier l’enregistrement et l’authentification d’un utilisateur.
     • Tester la génération, la vérification et l’expiration d’un JWT.
     • Contrôler la fonction de vérification d’autorisation par rôle.
@@ -41,7 +41,7 @@ class TestAuthController(unittest.TestCase):
         self.engine.dispose()
 
     # --------------------------------------------------------------------- #
-    # Cas : création + authentification
+    # Cas : création + authentification
     # --------------------------------------------------------------------- #
     def test_register_and_authenticate_user(self) -> None:
         """Un utilisateur peut être enregistré puis authentifié."""
@@ -72,7 +72,7 @@ class TestAuthController(unittest.TestCase):
         self.assertIsNone(failed_user)
 
     # --------------------------------------------------------------------- #
-    # Cas : génération et vérification d’un token
+    # Cas : génération et vérification d’un token
     # --------------------------------------------------------------------- #
     def test_generate_and_verify_token(self) -> None:
         """Le token JWT contient l’ID utilisateur et son rôle."""
@@ -93,7 +93,7 @@ class TestAuthController(unittest.TestCase):
         self.assertEqual(payload["role"], user.role.name)
 
     # --------------------------------------------------------------------- #
-    # Cas : vérification d’autorisation
+    # Cas : vérification d’autorisation
     # --------------------------------------------------------------------- #
     def test_is_authorized(self) -> None:
         """`is_authorized` renvoie True/False selon le rôle demandé."""
@@ -112,7 +112,7 @@ class TestAuthController(unittest.TestCase):
         self.assertFalse(self.auth_controller.is_authorized(token, "support"))
 
     # --------------------------------------------------------------------- #
-    # Cas : token expiré
+    # Cas : token expiré
     # --------------------------------------------------------------------- #
     def test_verify_expired_token(self) -> None:
         """Un token expiré lève une exception avec un message explicite."""

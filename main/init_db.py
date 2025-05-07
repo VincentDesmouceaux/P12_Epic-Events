@@ -2,7 +2,7 @@
 """
 Création du schéma SQL.
 
-Le module expose une seule fonction :
+Le module expose une seule fonction :
 
     init_db()  – supprime l’éventuel schéma existant puis recrée
                  l’ensemble des tables déclarées dans les modèles.

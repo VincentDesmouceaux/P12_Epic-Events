@@ -1,9 +1,9 @@
 # tests/testunitaire/test_event_management.py
 # -*- coding: utf-8 -*-
 """
-Suite de tests « gestion des évènements ».
+Suite de tests « gestion des évènements ».
 
-Vérifie notamment :
+Vérifie notamment :
     • la sélection des évènements sans technicien support ;
     • l’affectation d’un technicien à un évènement existant.
 """
@@ -20,7 +20,7 @@ from app.authentification.auth_controller import AuthController
 
 
 class DummyDBConnection:
-    """Connexion BD factice : fournit uniquement `create_session()`."""
+    """Connexion BD factice : fournit uniquement `create_session()`."""
 
     def __init__(self, session_factory):
         self.SessionLocal = session_factory

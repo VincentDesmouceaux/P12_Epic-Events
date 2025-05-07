@@ -3,12 +3,12 @@
 """
 Vue **lecture seule** pour l’affichage des entités métier.
 
-Le rôle de `DataReaderView` est purement *UI* :  
+Le rôle de `DataReaderView` est purement *UI* :  
 il interroge le contrôleur `DataReader`, formate chaque entité en
 chaine lisible puis l’affiche dans la console à l’aide des méthodes
 de coloration héritées de `GenericView`.
 
-Fonctionnalités :
+Fonctionnalités :
 
 * **Clients**                     : `display_clients_only`
 * **Contrats**                    : `display_contracts_only`
@@ -27,7 +27,7 @@ from app.views.generic_view import GenericView
 
 class DataReaderView(GenericView):
     """
-    Couche « vue » pour la consultation des données.
+    Couche « vue » pour la consultation des données.
 
     Parameters
     ----------
@@ -49,7 +49,7 @@ class DataReaderView(GenericView):
     # ------------------------------------------------------------------ #
     def _fmt(self, entity) -> str:
         """
-        Transforme une entité SQLAlchemy en dictionnaire « propre ».
+        Transforme une entité SQLAlchemy en dictionnaire « propre ».
 
         Le champ *password_hash* est volontairement masqué pour éviter
         l’affichage de données sensibles.
@@ -103,7 +103,7 @@ class DataReaderView(GenericView):
         Parameters
         ----------
         title :
-            Libellé à afficher avant la liste (ex. « Contrats non signés »).
+            Libellé à afficher avant la liste (ex. « Contrats non signés »).
         contracts :
             Liste d’instances `Contract` à afficher.
         """

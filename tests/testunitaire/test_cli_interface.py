@@ -1,5 +1,5 @@
 # app/views/cli_interface.py
-"""Interface en ligne de commande (CLI) d’Epic Events.
+"""Interface en ligne de commande (CLI) d’Epic Events.
 
 Fonctionnalités principales
 ---------------------------
@@ -8,9 +8,9 @@ Fonctionnalités principales
 * Écriture / gestion des entités pour les rôles autorisés.
 * Sortie propre en cas de Ctrl‑C ou Ctrl‑D.
 
-Trois rôles :
+Trois rôles :
     • gestion     → accès complet + administration des collaborateurs  
-    • commercial  → gestion de « ses » clients / contrats / événements  
+    • commercial  → gestion de « ses » clients / contrats / événements  
     • support     → mise à jour des événements assignés
 """
 from __future__ import annotations

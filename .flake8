@@ -1,0 +1,41 @@
+[flake8]
+max-line-length = 119
+
+ignore =
+    E203
+    W503
+    W504
+    W291
+    E501
+    D100, D104, D401
+    ANN101, ANN102, ANN401
+    E241
+    I100
+    E704
+
+select = B, C4, TID, ANN, D, E, F, W
+
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    env,
+    venv,
+    *.egg-info,
+    build,
+    dist,
+    node_modules,
+    staticfiles,
+    *.log,
+    .DS_Store,
+    .AppleDouble,
+    .Spotlight-V100,
+    .Trashes
+
+per-file-ignores =
+    */__init__.py: F401,F403
+    main/seed_db.py: E501
+    main/init_db.py: E501
+
+format = html
+htmldir = flake8-report

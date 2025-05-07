@@ -1,4 +1,4 @@
-"""Déclaration de la « base » SQLAlchemy pour tous les modèles.
+"""Déclaration de la « base » SQLAlchemy pour tous les modèles.
 
 Chaque classe‐modèle de l’application hérite de `Base` afin de partager
 la même métadonnée et de permettre à SQLAlchemy de créer le schéma.

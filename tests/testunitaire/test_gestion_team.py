@@ -1,11 +1,11 @@
 # tests/testunitaire/test_gestion_team.py
 # -*- coding: utf-8 -*-
 """
-Suite de tests « équipe gestion ».
+Suite de tests « équipe gestion ».
 
-Couverture :
-    • génération automatique du matricule collaborateur ;
-    • mise à jour par `employee_number` ;
+Couverture :
+    • génération automatique du matricule collaborateur ;
+    • mise à jour par `employee_number` ;
     • suppression d’un collaborateur par `employee_number`.
 """
 

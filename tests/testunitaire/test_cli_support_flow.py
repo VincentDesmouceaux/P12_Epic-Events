@@ -1,16 +1,16 @@
 """
-Tests CLI – parcours complet pour un utilisateur « support ».
+Tests CLI – parcours complet pour un utilisateur « support ».
 
-But :
+But :
     • s’assurer que le sous‑menu *Événements* est bien accessible
-      depuis la section *Gestion* ;
+      depuis la section *Gestion* ;
     • vérifier que les deux actions internes
         – _display_my_events
         – _update_my_event_cli
-      sont appelées exactement une fois ;
+      sont appelées exactement une fois ;
     • garantir l’absence d’exception pendant la navigation.
 
-Toutes les méthodes de DataWriterView sont patchées : jamais d’accès
+Toutes les méthodes de DataWriterView sont patchées : jamais d’accès
 réel à la base de données.
 """
 
@@ -24,14 +24,14 @@ from unittest.mock import MagicMock, patch
 
 
 class _DummySession:
-    """Session SQLAlchemy vide : aucune requête exécutée."""
+    """Session SQLAlchemy vide : aucune requête exécutée."""
 
     def close(self) -> None:  # noqa: D401
         pass
 
 
 class _DummyDB:
-    """Connexion factice : renvoie toujours une _DummySession."""
+    """Connexion factice : renvoie toujours une _DummySession."""
 
     def create_session(self) -> _DummySession:  # noqa: D401
         return _DummySession()

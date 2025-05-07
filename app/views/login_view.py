@@ -1,14 +1,14 @@
 # app/views/login_view.py
 # -*- coding: utf-8 -*-
 """
-Vue *Login* : gère l’authentification utilisateur en ligne de commande.
+Vue *Login* : gère l’authentification utilisateur en ligne de commande.
 
-Trois variantes sont proposées :
+Trois variantes sont proposées :
 
-* :pymeth:`login` : interactive (prompts `input`).
-* :pymeth:`login_with_credentials` : appelle la même logique mais
+* :pymeth:`login` : interactive (prompts `input`).
+* :pymeth:`login_with_credentials` : appelle la même logique mais
   grâce à des paramètres passés en arguments — utile pour les scripts.
-* :pymeth:`login_with_credentials_return_user` : identique à la
+* :pymeth:`login_with_credentials_return_user` : identique à la
   précédente mais renvoie directement l’objet ``User`` (employé pour
   les tests unitaires).
 """
@@ -40,10 +40,10 @@ class LoginView(GenericView):
     # ----------------------------------------------------------------- #
     def login(self) -> None:
         """
-        Mode interactif : questionne l’utilisateur puis affiche le résultat.
+        Mode interactif : questionne l’utilisateur puis affiche le résultat.
 
-        * Succès : le JWT est imprimé.
-        * Échec : message d’erreur en rouge.
+        * Succès : le JWT est imprimé.
+        * Échec : message d’erreur en rouge.
 
         Notes
         -----
@@ -86,7 +86,7 @@ class LoginView(GenericView):
 
     def login_with_credentials_return_user(self, email: str, password: str):
         """
-        Variante silencieuse : renvoie l’objet ``User`` ou *None*.
+        Variante silencieuse : renvoie l’objet ``User`` ou *None*.
 
         Cette méthode est pratique dans les tests automatisés afin de
         récupérer directement l’instance pour des vérifications

@@ -1,17 +1,17 @@
 # app/views/cli_interface.py
 # -*- coding: utf-8 -*-
 """
-CLI Interface
+CLI Interface
 =============
 
-Interface texte principale de l’application **Epic Events**.  
-Le menu affiché dépend du rôle du collaborateur connecté :
+Interface texte principale de l’application **Epic Events**.  
+Le menu affiché dépend du rôle du collaborateur connecté :
 
-* **gestion**    : collaborateurs / clients / contrats / événements  
+* **gestion**    : collaborateurs / clients / contrats / événements  
 * **commercial** : clients / contrats / événements  
-* **support**    : événements (mais accès *lecture* complet)
+* **support**    : événements (mais accès *lecture* complet)
 
-Toutes les interactions clavier sont protégées ; aucune trace « debug »
+Toutes les interactions clavier sont protégées ; aucune trace « debug »
 n’est affichée pour garder la sortie propre en production.
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ from app.views.data_writer_view import DataWriterView
 
 
 class CLIInterface(GenericView):
-    """Point d’entrée CLI ; orchestre les vues Login, Lecture et Écriture."""
+    """Point d’entrée CLI ; orchestre les vues Login, Lecture et Écriture."""
 
     # ------------------------------------------------------------------ #
     # Construction                                                       #
@@ -46,7 +46,7 @@ class CLIInterface(GenericView):
     # Menu principal                                                     #
     # ------------------------------------------------------------------ #
     def _main_menu(self) -> None:
-        """Affiche le menu racine (connexion / lecture / gestion)."""
+        """Affiche le menu racine (connexion / lecture / gestion)."""
         self.print_header("\n======== Epic Events CLI ========")
         print(self.BLUE + "[1] Se connecter" + self.END)
         if self.current_user:
@@ -95,7 +95,7 @@ class CLIInterface(GenericView):
     # Lecture                                                            #
     # ------------------------------------------------------------------ #
     def _read_menu(self) -> None:
-        """Sous‑menu *Lecture* : mêmes options pour tous les rôles."""
+        """Sous‑menu *Lecture* : mêmes options pour tous les rôles."""
         while True:
             self.print_header("-- Lecture des données --")
             print(self.BLUE + "[1] Clients" + self.END)
@@ -123,7 +123,7 @@ class CLIInterface(GenericView):
     # Gestion / écriture                                                 #
     # ------------------------------------------------------------------ #
     def _write_menu(self) -> None:
-        """Sous‑menu *Gestion* : options variables selon le rôle."""
+        """Sous‑menu *Gestion* : options variables selon le rôle."""
         role = self.current_user["role"]
         while True:
             self.print_header("-- Gestion --")
@@ -132,14 +132,14 @@ class CLIInterface(GenericView):
             if role == "gestion":
                 options += [
                     ("1", "Collaborateurs", self._menu_collaborator),
-                    ("2", "Contrats",       self._menu_contract_gestion),
-                    ("3", "Événements",     self._menu_event_gestion),
+                    ("2", "Contrats", self._menu_contract_gestion),
+                    ("3", "Événements", self._menu_event_gestion),
                 ]
             elif role == "commercial":
                 options += [
-                    ("1", "Clients",        self._menu_client),
-                    ("2", "Contrats",       self._menu_contract_commercial),
-                    ("3", "Événements",     self._menu_event_commercial),
+                    ("1", "Clients", self._menu_client),
+                    ("2", "Contrats", self._menu_contract_commercial),
+                    ("3", "Événements", self._menu_event_commercial),
                 ]
             else:  # support
                 options.append(("1", "Événements", self._menu_event_support))

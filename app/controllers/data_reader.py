@@ -3,23 +3,23 @@
 DataReader
 ==========
 
-Couche « lecture » de l’application.  
+Couche « lecture » de l’application.  
 Une fois authentifié, chaque collaborateur – quel que soit son rôle
-(gestion / commercial / support) – peut consulter l’ensemble des
+(gestion / commercial / support) – peut consulter l’ensemble des
 *clients*, *contrats* et *événements*.
 
-Un filtre optionnel peut toutefois être appliqué :
+Un filtre optionnel peut toutefois être appliqué :
 
-* **commercial** : si le dictionnaire *current_user* contient la clé
+* **commercial** : si le dictionnaire *current_user* contient la clé
   ``"force_filter"`` (True), seules les entités rattachées au commercial
-  courant sont renvoyées ;
-* **support**  : idem, mais limité aux événements assignés au
+  courant sont renvoyées ;
+* **support**  : idem, mais limité aux événements assignés au
   technicien support.
 
 Notes
 -----
 * Aucun décorateur n’est utilisé (pas de ``@staticmethod``).  
-* Aucune trace de debug n’est émise ; les méthodes se contentent de
+* Aucune trace de debug n’est émise ; les méthodes se contentent de
   renvoyer les listes demandées ou de lever une :class:`PermissionError`
   lorsqu’un utilisateur non authentifié les invoque.
 """
@@ -67,8 +67,8 @@ class DataReader:
         session.expire_all()
 
         if (
-            current_user.get("role") == "commercial"
-            and current_user.get("force_filter")
+            current_user.get("role") == "commercial" and
+            current_user.get("force_filter")
         ):
             return (
                 session.query(Client)
@@ -90,8 +90,8 @@ class DataReader:
         session.expire_all()
 
         if (
-            current_user.get("role") == "commercial"
-            and current_user.get("force_filter")
+            current_user.get("role") == "commercial" and
+            current_user.get("force_filter")
         ):
             return (
                 session.query(Contract)
@@ -106,9 +106,9 @@ class DataReader:
         """
         Renvoie la liste des événements.
 
-        *Commercial* : avec ``"force_filter": True``, seuls les événements
+        *Commercial* : avec ``"force_filter": True``, seuls les événements
         liés aux contrats du commercial sont retournés.  
-        *Support*    : avec ``"force_filter": True``, seuls les événements
+        *Support*    : avec ``"force_filter": True``, seuls les événements
         assignés au support courant sont retournés.
         """
         self._ensure_authenticated(current_user)

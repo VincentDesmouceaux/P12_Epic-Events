@@ -9,7 +9,7 @@ intitulés cohérents dans le terminal.
 
 
 class GenericView:
-    """Méthodes : :pymeth:`print_header`, :pymeth:`print_blue`, etc."""
+    """Méthodes : :pymeth:`print_header`, :pymeth:`print_blue`, etc."""
 
     # ----------------------------------------------------------------- #
     # Construction

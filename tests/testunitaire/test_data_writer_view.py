@@ -1,8 +1,8 @@
 """
-Tests rapides DataWriter :
+Tests rapides DataWriter :
 
-1. création d’un utilisateur (gestion) ;
-2. création d’un client ;
+1. création d’un utilisateur (gestion) ;
+2. création d’un client ;
 3. création puis mise à jour d’un contrat.
 """
 
@@ -38,7 +38,7 @@ class TestDataWriterView(unittest.TestCase):
         self.auth = AuthController()
         self.writer = DataWriter(self.db)
 
-        # rôle « gestion »
+        # rôle « gestion »
         role_gestion = Role(id=3, name="gestion")
         self.session.add(role_gestion)
         self.session.commit()
@@ -50,7 +50,7 @@ class TestDataWriterView(unittest.TestCase):
         self.db.engine.dispose()
 
     def test_create_update_user_and_contract(self) -> None:
-        """Flux complet : crée puis met à jour les entités."""
+        """Flux complet : crée puis met à jour les entités."""
         # Utilisateur
         user = self.writer.create_user(
             self.session, self.current_user,

@@ -4,7 +4,7 @@
 Vue CLI – **DataWriterView**
 
 Cette vue regroupe toutes les entrées / sorties côté console permettant
-d’utiliser la couche « métier » d’écriture (`DataWriter`) :
+d’utiliser la couche « métier » d’écriture (`DataWriter`) :
 
 * **Gestion**
   - CRUD collaborateurs
@@ -22,7 +22,7 @@ d’utiliser la couche « métier » d’écriture (`DataWriter`) :
 Les contrôles de saisie (e‑mail, téléphone, date…) sont effectués ici afin
 d’éviter d’appeler la couche métier avec des valeurs déjà invalides.
 
-Aucune fonction n’est statique ; tout repose sur l’instance pour conserver
+Aucune fonction n’est statique ; tout repose sur l’instance pour conserver
 l’état éventuel (connexion BD, utilisateur courant, etc.).
 """
 from __future__ import annotations
@@ -101,7 +101,7 @@ class DataWriterView(GenericView):
                 return None
             if self._REG_PHONE.match(tel):
                 return tel
-            self.print_red("Numéro invalide (6‑20 chiffres, ‘+’ optionnel).")
+            self.print_red("Numéro invalide (6‑20 chiffres, ‘+’ optionnel).")
 
     def _ask_positive_float(self, prompt: str,
                             allow_empty: bool = False) -> Optional[float]:
@@ -140,7 +140,7 @@ class DataWriterView(GenericView):
             self.print_red("Format YYYY‑MM‑DD requis.")
 
     # ------------------------------------------------------------------ #
-    #  Saisie générique : centralise la gestion d’erreurs console        #
+    #  Saisie générique : centralise la gestion d’erreurs console        #
     # ------------------------------------------------------------------ #
     def _ask(self, prompt: str, cast=str,
              allow_empty: bool = False) -> Optional[Any]:
@@ -496,7 +496,7 @@ class DataWriterView(GenericView):
         event_id : int | None
             Identifiant de l’événement (demande si None).
         support_emp : str | None
-            Employee Number du support (demande si None).
+            Employee Number du support (demande si None).
         """
         if event_id is None:
             event_id = self._ask_positive_int("ID événement : ")

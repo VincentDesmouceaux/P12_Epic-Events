@@ -1,4 +1,4 @@
-"""Modèle « User ».
+"""Modèle « User ».
 
 Représente un collaborateur de l’entreprise, rattaché à un rôle
 (:class:`app.models.role.Role`).

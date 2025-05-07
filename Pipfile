@@ -13,8 +13,13 @@ click = "*"
 pymysql = "*"
 coverage = "*"
 sentry-sdk = "*"
+flake8-html = "*"
 
 [dev-packages]
+flake8 = "*"
+flake8-bugbear = "*"
+flake8-comprehensions = "*"
+flake8-import-order = "*"
 
 [requires]
 python_version = "3.12"

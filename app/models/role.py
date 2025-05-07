@@ -1,7 +1,7 @@
-"""Modèle « Role ».
+"""Modèle « Role ».
 
 Un rôle représente le département ou les droits d’un collaborateur
-(ex. : *commercial*, *support*, *gestion*).
+(ex. : *commercial*, *support*, *gestion*).
 """
 
 from __future__ import annotations

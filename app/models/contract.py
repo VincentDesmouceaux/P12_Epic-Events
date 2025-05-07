@@ -1,4 +1,4 @@
-"""Modèle « Contract ».
+"""Modèle « Contract ».
 
 Un contrat relie un client à un commercial et précise le montant
 engagé, le reste à payer, la date de création et l’état de signature.
