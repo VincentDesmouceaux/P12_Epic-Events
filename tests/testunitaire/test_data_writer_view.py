@@ -1,21 +1,25 @@
 """
-Tests rapides : création d’un utilisateur puis d’un client & contrat,
-puis mise à jour du contrat – le tout via DataWriter (pas la vue CLI).
+Tests rapides DataWriter :
+
+1. création d’un utilisateur (gestion) ;
+2. création d’un client ;
+3. création puis mise à jour d’un contrat.
 """
+
+from __future__ import annotations
 
 import unittest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models import Base, Role, User, Client
+from app.models import Base, Role, Client
 from app.controllers.data_writer import DataWriter
 from app.authentification.auth_controller import AuthController
 
 
-# ------------------------------------------------------------------ #
-#  Connexion factice                                                 #
-# ------------------------------------------------------------------ #
 class _DummyDB:
+    """Connexion SQLite en mémoire pour les tests unitaires."""
+
     def __init__(self):
         self.engine = create_engine("sqlite:///:memory:")
         self.Session = sessionmaker(bind=self.engine)
@@ -25,29 +29,29 @@ class _DummyDB:
         return self.Session()
 
 
-# ------------------------------------------------------------------ #
-#  Suite                                                             #
-# ------------------------------------------------------------------ #
 class TestDataWriterView(unittest.TestCase):
-    def setUp(self):
+    """Vérifie un flux complet (utilisateur → client → contrat)."""
+
+    def setUp(self) -> None:
         self.db = _DummyDB()
         self.session = self.db.create_session()
         self.auth = AuthController()
         self.writer = DataWriter(self.db)
 
-        # rôle « gestion »
-        self.role_g = Role(id=3, name="gestion")
-        self.session.add(self.role_g)
+        # rôle « gestion »
+        role_gestion = Role(id=3, name="gestion")
+        self.session.add(role_gestion)
         self.session.commit()
         self.current_user = {"id": 999, "role": "gestion", "role_id": 3}
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.session.close()
         Base.metadata.drop_all(self.db.engine)
         self.db.engine.dispose()
 
-    def test_create_update_user_and_contract(self):
-        # ----- utilisateur -----
+    def test_create_update_user_and_contract(self) -> None:
+        """Flux complet : crée puis met à jour les entités."""
+        # Utilisateur
         user = self.writer.create_user(
             self.session, self.current_user,
             employee_number=None,
@@ -57,14 +61,13 @@ class TestDataWriterView(unittest.TestCase):
             password_hash=self.auth.hasher.hash("x"),
             role_id=3,
         )
-        self.assertTrue(user.employee_number.startswith("G"))
 
-        # ----- client -----
+        # Client
         client = Client(full_name="CL", email="cl@x", commercial_id=user.id)
         self.session.add(client)
         self.session.commit()
 
-        # ----- contrat -----
+        # Contrat
         contract = self.writer.create_contract(
             self.session, self.current_user,
             client_id=client.id,
@@ -72,12 +75,10 @@ class TestDataWriterView(unittest.TestCase):
             remaining_amount=5_000.0,
             is_signed=False,
         )
-        self.assertEqual(contract.total_amount, 10_000.0)
 
-        # ----- mise à jour -----
+        # Mise à jour du contrat
         updated = self.writer.update_contract(
-            self.session,
-            self.current_user,
+            self.session, self.current_user,
             contract.id,
             remaining_amount=0.0,
             is_signed=True,

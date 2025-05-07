@@ -1,4 +1,11 @@
 # tests/testintegration/test_integration_write.py
+# ==============================================================
+# Tests d’intégration : vérifie, sur une vraie base de données
+# définie dans .env, que les opérations d’écriture fonctionnent
+# correctement (créations, mises à jour, relations).
+# ==============================================================
+
+from __future__ import annotations
 import unittest
 from datetime import datetime
 
@@ -14,63 +21,53 @@ from app.controllers.data_writer import DataWriter
 
 class TestIntegrationWrite(unittest.TestCase):
     """
-    Test d'intégration (sans décorateurs).
-    On se connecte réellement à la base définie dans .env,
-    puis on crée et modifie des données pour vérifier le bon fonctionnement.
+    Batteries de tests d’intégration pour la couche DataWriter.
+
+    Chaque test :
+        • se connecte à la base MySQL renseignée dans le fichier .env ;
+        • crée (ou ré‑initialise) le schéma complet ;
+        • effectue une ou plusieurs opérations d’écriture ;
+        • vérifie par requête directe que la base reflète bien l’action.
     """
 
-    def setUp(self):
-        """
-        Exécutée avant chaque test :
-          - Lecture de la config via .env et initialisation de DatabaseConnection.
-          - Création (ou recréation) des tables.
-          - Ouverture d'une session SQLAlchemy.
-          - Vérification/insertion du rôle commercial (id=2).
-        """
-        print("\n[INTEGRATION] setUp: Initialisation DatabaseConnection (via .env).")
+    # ------------------------------------------------------------------
+    # Phase de préparation / nettoyage
+    # ------------------------------------------------------------------
+    def setUp(self) -> None:
+        """Initialise une base neuve et prépare un DataWriter pour les tests."""
         self.db_config = DatabaseConfig()
         self.db_connection = DatabaseConnection(self.db_config)
+
+        # Création du schéma (idempotent).
         Base.metadata.create_all(bind=self.db_connection.engine)
         self.session = self.db_connection.create_session()
 
-        # Vérifie que le rôle commercial (id=2) est présent
-        existing_role = self.session.query(Role).filter_by(id=2).first()
-        if not existing_role:
-            print("[INTEGRATION] setUp: Insertion du rôle id=2 (commercial).")
-            role = Role(id=2, name="commercial",
-                        description="Role for integration tests")
-            self.session.add(role)
+        # S’assure que le rôle « commercial » (id = 2) existe.
+        if not self.session.query(Role).filter_by(id=2).first():
+            self.session.add(Role(id=2, name="commercial",
+                                  description="Role for integration tests"))
             self.session.commit()
-        else:
-            print("[INTEGRATION] setUp: Le rôle id=2 (commercial) existe déjà.")
 
+        # Outil métier sous test
         self.data_writer = DataWriter(self.db_connection)
-        print("[INTEGRATION] setUp terminé.")
 
-    def tearDown(self):
-        """
-        Exécutée après chaque test :
-          - Fermeture de la session.
-          - Suppression des tables (checkfirst=True) et fermeture de l'engine.
-        """
-        print("[INTEGRATION] tearDown: Fermeture de la session et drop des tables.")
+    def tearDown(self) -> None:
+        """Nettoie la base après chaque test pour repartir d’un état vierge."""
         self.session.close()
         Base.metadata.drop_all(bind=self.db_connection.engine, checkfirst=True)
         self.db_connection.engine.dispose()
-        print("[INTEGRATION] tearDown terminé.\n")
 
-    def test_create_user_in_mysql(self):
-        """
-        Test d'intégration : création d'un utilisateur via DataWriter dans MySQL
-        et vérification de son insertion dans la base.
-        """
-        print("[INTEGRATION] test_create_user_in_mysql: start")
+    # ------------------------------------------------------------------
+    # Cas de test
+    # ------------------------------------------------------------------
+    def test_create_user_in_mysql(self) -> None:
+        """Création simple d’un collaborateur commercial puis vérification."""
         current_user = {"id": 999, "role": "gestion"}
         local_session = self.db_connection.create_session()
 
+        # Création
         new_user = self.data_writer.create_user(
-            local_session,              # 1er argument : session
-            # 2e argument : utilisateur courant  ❰ plus de « current_user=… » ❱
+            local_session,
             current_user,
             employee_number="EMP_INT001",
             first_name="Integration",
@@ -80,35 +77,29 @@ class TestIntegrationWrite(unittest.TestCase):
             role_id=2
         )
 
-        self.assertIsNotNone(new_user, "L'utilisateur doit être créé.")
-        self.assertIsNotNone(new_user.id, "L'utilisateur doit avoir un ID.")
-        print(f"[INTEGRATION] User created with ID={new_user.id}")
+        # Vérifications en base
+        self.assertIsNotNone(new_user)
+        self.assertIsNotNone(new_user.id)
 
         found = local_session.query(User).filter_by(
             employee_number="EMP_INT001").first()
-        self.assertIsNotNone(
-            found, "L'utilisateur doit être retrouvé en base.")
+        self.assertIsNotNone(found)
         self.assertEqual(found.first_name, "Integration")
         self.assertEqual(found.role_id, 2)
 
         local_session.close()
-        print("[INTEGRATION] test_create_user_in_mysql: end\n")
 
-    def test_create_contract_in_mysql(self):
+    def test_create_contract_in_mysql(self) -> None:
         """
-        Test d'intégration :
-          - Création d'un utilisateur commercial.
-          - Création d'un client rattaché à ce commercial.
-          - Création d'un contrat (la méthode create_contract récupère automatiquement
-            le commercial associé au client).
-          - Mise à jour du contrat en modifiant à la fois le montant total et le montant restant.
+        • Crée un commercial ;
+        • Crée un client lié ;
+        • Crée un contrat puis le met à jour ;
+        • Vérifie chaque étape.
         """
-        print("[INTEGRATION] test_create_contract_in_mysql: start")
         local_session = self.db_connection.create_session()
         current_user = {"id": 999, "role": "gestion"}
 
-        # Création de l'utilisateur commercial
-        new_user = self.data_writer.create_user(
+        commercial = self.data_writer.create_user(
             local_session,
             current_user,
             employee_number="EMP_INT002",
@@ -116,74 +107,54 @@ class TestIntegrationWrite(unittest.TestCase):
             last_name="Integration",
             email="commercial.integration@example.com",
             password_hash="somehash",
-            role_id=2  # rôle commercial
+            role_id=2
         )
-        self.assertIsNotNone(
-            new_user, "L'utilisateur commercial doit être créé.")
-        self.assertIsNotNone(new_user.id)
 
-        # Création d'un client associé au commercial
-        new_client = self.data_writer.create_client(
+        client = self.data_writer.create_client(
             local_session,
             current_user,
             full_name="Client Int",
             email="client.int@example.com",
             phone="0123456789",
             company_name="Int Company",
-            commercial_id=new_user.id
+            commercial_id=commercial.id
         )
-        self.assertIsNotNone(new_client, "Le client doit être créé.")
-        self.assertIsNotNone(new_client.id)
 
-        # Création d'un contrat
-        new_contract = self.data_writer.create_contract(
+        contract = self.data_writer.create_contract(
             local_session,
             current_user,
-            client_id=new_client.id,
+            client_id=client.id,
             total_amount=5000.0,
             remaining_amount=2500.0,
             is_signed=False
         )
-        self.assertIsNotNone(new_contract, "Le contrat doit être créé.")
-        self.assertIsNotNone(new_contract.id)
-        print(f"[INTEGRATION] Contract created with ID={new_contract.id}")
 
-        found = local_session.query(Contract).filter_by(
-            id=new_contract.id).first()
-        self.assertIsNotNone(found, "Le contrat doit exister en base.")
-        self.assertEqual(found.remaining_amount, 2500.0)
-
-        # Mise à jour du contrat : modification du total et du restant
-        updated_contract = self.data_writer.update_contract(
+        # Mise à jour
+        updated = self.data_writer.update_contract(
             local_session,
             current_user,
-            new_contract.id,
+            contract.id,
             total_amount=6000.0,
             remaining_amount=3000.0,
             is_signed=False
         )
-        self.assertEqual(updated_contract.total_amount, 6000.0,
-                         "Le montant total doit être mis à jour à 6000.0.")
-        self.assertEqual(updated_contract.remaining_amount, 3000.0,
-                         "Le montant restant doit être mis à jour à 3000.0.")
+
+        # Vérifications
+        self.assertEqual(updated.total_amount, 6000.0)
+        self.assertEqual(updated.remaining_amount, 3000.0)
 
         local_session.close()
-        print("[INTEGRATION] test_create_contract_in_mysql: end\n")
 
-    def test_update_event_assign_by_employee_number(self):
+    def test_update_event_assign_by_employee_number(self) -> None:
         """
-        Test d'intégration :
-          - Création d'un contrat et d'un événement sans support.
-          - Recherche d'un collaborateur support par employee_number ("S001").  
-            Si aucun collaborateur ne correspond, le test le crée.
-          - Mise à jour de l'événement pour y assigner le support trouvé.
+        Crée un contrat + événement sans support, puis assigne un support
+        identifié par son *employee_number*.
         """
-        print("[INTEGRATION] test_update_event_assign_by_employee_number: start")
         local_session = self.db_connection.create_session()
         current_user = {"id": 999, "role": "gestion"}
 
-        # Création d'un utilisateur commercial et d'un client pour disposer d'un contrat.
-        commercial_user = self.data_writer.create_user(
+        # Préparation : commercial, client, contrat signé
+        commercial = self.data_writer.create_user(
             local_session,
             current_user,
             employee_number="EMP_INT003",
@@ -193,31 +164,31 @@ class TestIntegrationWrite(unittest.TestCase):
             password_hash="hash",
             role_id=2
         )
-        new_client = self.data_writer.create_client(
+
+        client = self.data_writer.create_client(
             local_session,
             current_user,
             full_name="Event Client",
             email="event.client@example.com",
             phone="0123456789",
             company_name="Event Corp",
-            commercial_id=commercial_user.id
+            commercial_id=commercial.id
         )
-        new_contract = self.data_writer.create_contract(
+
+        contract = self.data_writer.create_contract(
             local_session,
             current_user,
-            client_id=new_client.id,
+            client_id=client.id,
             total_amount=8000.0,
             remaining_amount=4000.0,
             is_signed=True
         )
-        self.assertIsNotNone(
-            new_contract, "Le contrat doit être créé pour l'événement.")
 
-        # Création d'un événement sans support
-        new_event = self.data_writer.create_event(
+        # Événement sans support
+        event = self.data_writer.create_event(
             local_session,
             current_user,
-            contract_id=new_contract.id,
+            contract_id=contract.id,
             support_id=None,
             date_start=datetime(2023, 7, 10, 9, 0),
             date_end=datetime(2023, 7, 10, 17, 0),
@@ -225,14 +196,12 @@ class TestIntegrationWrite(unittest.TestCase):
             attendees=100,
             notes="Initial event without support"
         )
-        self.assertIsNotNone(new_event, "L'événement doit être créé.")
 
-        # Recherche d'un collaborateur support par employee_number "S001"
-        from app.models.user import User
-        support_user = local_session.query(
-            User).filter_by(employee_number="S001").first()
-        if not support_user:
-            support_user = self.data_writer.create_user(
+        # Récupération ou création du support « S001 »
+        support = local_session.query(User).filter_by(
+            employee_number="S001").first()
+        if not support:
+            support = self.data_writer.create_user(
                 local_session,
                 current_user,
                 employee_number="S001",
@@ -240,20 +209,19 @@ class TestIntegrationWrite(unittest.TestCase):
                 last_name="User",
                 email="support.user@example.com",
                 password_hash="supporthash",
-                # rôle support (ici on considère que le rôle support a l'ID 2)
                 role_id=2
             )
-        # Mise à jour de l'événement en assignant le support trouvé
+
+        # Assignation du support
         updated_event = self.data_writer.update_event(
             local_session,
             current_user,
-            new_event.id,
-            support_id=support_user.id
+            event.id,
+            support_id=support.id
         )
-        self.assertEqual(updated_event.support_id, support_user.id,
-                         "Le support assigné doit correspondre à celui trouvé (via employee_number).")
+
+        self.assertEqual(updated_event.support_id, support.id)
         local_session.close()
-        print("[INTEGRATION] test_update_event_assign_by_employee_number: end\n")
 
 
 if __name__ == "__main__":

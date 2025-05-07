@@ -1,9 +1,11 @@
+# tests/testunitaire/test_login_view.py
+# -*- coding: utf-8 -*-
 """
-Tests unitaires – LoginView
----------------------------
-Vérifie l’affichage des messages :
-  • succès si l’authentification fonctionne
-  • échec sinon
+Tests unitaires – `LoginView`.
+
+Vérifie :
+    • le message affiché après un succès d’authentification ;
+    • le message affiché après un échec.
 """
 
 import builtins
@@ -16,52 +18,57 @@ from app.views.login_view import LoginView
 from app.authentification.auth_controller import AuthController
 
 
-# ------------------------------------------------------------------ #
-#  Double très simple pour la connexion BD                           #
-# ------------------------------------------------------------------ #
 class _DummyDB:
+    """Double simplifié de connexion BD (aucun accès réel)."""
+
     def create_session(self):
-        class _Sess:          # session inerte (pas de SGBDR réel)
-            def close(self): ...
+        class _Sess:
+            """Session vide qui respecte simplement l’interface attendue."""
+
+            def close(self):
+                """Fin de session (noop)."""
+                ...
+
         return _Sess()
 
 
-# ------------------------------------------------------------------ #
-#  Suite de tests                                                    #
-# ------------------------------------------------------------------ #
 class TestLoginView(unittest.TestCase):
-    # ----------------------------- setUp --------------------------- #
+    """Tests portant sur l’affichage de `LoginView.login()`."""
+
+    # ------------------------------------------------------------------ #
+    # SET‑UP / TEAR‑DOWN                                                 #
+    # ------------------------------------------------------------------ #
     def setUp(self):
         self._orig_input = builtins.input
         self.db = _DummyDB()
         self.view = LoginView(self.db)
 
-    # --------------------------- tearDown -------------------------- #
     def tearDown(self):
         builtins.input = self._orig_input
 
-    # ------------------ aide : injection d’inputs ------------------ #
-    def _feed_input(self, *vals):
-        """Remplace la fonction input pour renvoyer en séquence `vals`."""
-        it = iter(vals)
-        builtins.input = lambda *_: next(it)
+    # ------------------------------------------------------------------ #
+    # OUTILS                                                             #
+    # ------------------------------------------------------------------ #
+    def _feed_input(self, *values):
+        """Substitue `input()` pour retourner les valeurs fournies."""
+        iterator = iter(values)
+        builtins.input = lambda *_: next(iterator)
 
-    # ------------------------ test succès -------------------------- #
+    # ------------------------------------------------------------------ #
+    # TESTS                                                              #
+    # ------------------------------------------------------------------ #
     def test_login_success(self):
+        """Le message de succès doit être affiché après une connexion valide."""
         ctrl = AuthController()
 
-        # --- objet utilisateur minimal mais complet -----------------
         MockRole = type("Role", (), {"name": "commercial"})
         MockUser = type(
-            "User",
-            (),
-            {"id": 1, "role": MockRole(), "email": "good@x"}
+            "User", (), {"id": 1, "role": MockRole(), "email": "good@x"}
         )()
 
-        # on patch :  authenticate_user (→ MockUser)
-        #             generate_token     (→ valeur factice)
-        with patch.object(ctrl, "authenticate_user", return_value=MockUser), \
-                patch.object(ctrl, "generate_token", return_value="TOKEN"):
+        with patch.object(ctrl, "authenticate_user", return_value=MockUser), patch.object(
+            ctrl, "generate_token", return_value="TOKEN"
+        ):
             self.view.auth_controller = ctrl
             self._feed_input("good@x", "pwd")
 
@@ -71,8 +78,8 @@ class TestLoginView(unittest.TestCase):
 
             self.assertIn("Authentification réussie", capture.getvalue())
 
-    # ------------------------ test échec --------------------------- #
     def test_login_failure(self):
+        """Le message d’échec doit apparaître si l’authentification rate."""
         ctrl = AuthController()
         with patch.object(ctrl, "authenticate_user", return_value=None):
             self.view.auth_controller = ctrl
@@ -85,8 +92,5 @@ class TestLoginView(unittest.TestCase):
             self.assertIn("Échec de l'authentification", capture.getvalue())
 
 
-# ------------------------------------------------------------------ #
-#  Exécution directe                                                 #
-# ------------------------------------------------------------------ #
 if __name__ == "__main__":
     unittest.main()

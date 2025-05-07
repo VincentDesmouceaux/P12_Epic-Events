@@ -1,18 +1,26 @@
+# tests/testunitaire/test_cli_menu_gestion.py
+"""Parcours complet des menus pour un utilisateur *gestion*.
+
+Le test simule toutes les branches (lecture + gestion) et s’assure
+qu’aucune exception n’est levée ainsi que la bonne invocation
+des méthodes internes patchées.
+"""
 import builtins
 import unittest
-from unittest.mock import MagicMock, patch
 from io import StringIO
 from contextlib import redirect_stdout
+from unittest.mock import MagicMock, patch
 
 
-# ====================== doubles minimalistes ====================== #
+# --- Doubles -----------------------------------------------------------------
 class DummyRole:
+    """Rôle fictif `gestion` – utilisé par *DummyUser*."""
     id = 3
     name = "gestion"
 
 
 class DummyUser:
-    """Objet User minimal doté d’un rôle « gestion »."""
+    """Utilisateur minimal possédant le rôle `gestion`."""
 
     def __init__(self):
         self.id = 1
@@ -20,81 +28,51 @@ class DummyUser:
 
 
 class DummySession:
-    """Session factice : aucune vraie requête SQL exécutée."""
+    """Session SQLAlchemy factice (aucune requête exécutée)."""
 
-    def close(self):
-        pass
+    def close(self): ...
 
 
 class DummyDBConnection:
-    """Connexion factice utilisée par le CLI."""
+    """Connexion BD factice compatible avec `CLIInterface`."""
 
     def create_session(self):
         return DummySession()
 
 
-# ============================ Tests =============================== #
 class TestCLIMenuGestion(unittest.TestCase):
-    """
-    Parcours complet des menus pour un utilisateur de rôle « gestion ».
+    """Tests de navigation pour le rôle *gestion*."""
 
-    Branches visitées :
-      • Lecture   : clients, contrats, événements
-      • Gestion   : collaborateurs (modifier),
-                    contrats      (afficher puis retour),
-                    événements    (afficher sans support puis assigner support)
-    Aucune exception ne doit être levée pendant l’exécution.
-    """
-
-    # --------------------------- setUp ----------------------------- #
-    def setUp(self):
-        # 1) Script des réponses passées à input()
+    # ---------------------------------------------------------------------- #
+    def setUp(self) -> None:
+        """Crée la séquence d’inputs et applique les patches nécessaires."""
         self._inputs = iter([
-            # ===== Connexion =====
+            # Connexion
             "1", "gest@example.com", "pwd",
-
-            # ===== Menu Lecture (principal -> 2) =====
-            "2",        # ouvrir menu Lecture
-            "1",  # clients
-            "2",  # contrats
-            "3",  # événements
-            "0",  # retour menu principal
-
-            # ===== Menu Gestion (principal -> 3) =====
-            "3",
-
-            # -- Collaborateurs : Modifier --
-            "1",  # menu Collaborateurs
-            "2",  # modifier
-
-            # -- Contrats : simple affichage --
-            "2",  # menu Contrats
-            "0",  # retour sous-menu Contrats
-
-            # -- Événements : afficher sans support puis assigner --
-            "3", "1",  # afficher sans support
-            "3", "2",  # assigner / modifier support
-
-            # -- Quitter --
-            "0",  # retour menu Gestion
-            "0"  # quitter application
+            # Lecture
+            "2", "1", "2", "3", "0",
+            # Gestion
+            "3", "1", "2",           # collaborateurs / modifier
+            "2", "0",                # contrats / retour
+            "3", "1", "3", "2",      # événements (sans support + assigner)
+            "0", "0"                 # retour + quitter
         ])
         self._orig_input = builtins.input
         builtins.input = lambda *_: next(self._inputs)
 
-        # 2) Redirige la sortie standard pour ne rien afficher
-        self._stdout_buf = StringIO()
-        self._redirect_ctx = redirect_stdout(self._stdout_buf)
-        self._redirect_ctx.__enter__()
+        # Redirection stdout pour ne pas polluer la console
+        self._stdout = StringIO()
+        self._redir = redirect_stdout(self._stdout)
+        self._redir.__enter__()
 
-        # 3) Patch du LoginView (auth toujours OK)
+        # Patch LoginView pour bypasser l’authentification
         self._patch_login = patch(
             "app.views.login_view.LoginView.login_with_credentials_return_user",
-            return_value=DummyUser()
+            return_value=DummyUser(),
         )
         self._patch_login.start()
 
-        # 4) Patch des méthodes appelées dans le scénario
+        # Patch des méthodes appelées dans le scénario
         to_patch = {
             # lecture
             "app.views.data_reader_view.DataReaderView.display_clients_only",
@@ -110,40 +88,37 @@ class TestCLIMenuGestion(unittest.TestCase):
         for p in self._patchers:
             p.start()
 
-        # 5) Instanciation du CLI avec la connexion factice
+        # Instanciation du CLI
         from app.views.cli_interface import CLIInterface
         self.cli = CLIInterface(DummyDBConnection())
 
-    # -------------------------- tearDown --------------------------- #
-    def tearDown(self):
+    # ---------------------------------------------------------------------- #
+    def tearDown(self) -> None:
+        """Nettoyage des patches et restauration de *input* / stdout."""
         builtins.input = self._orig_input
-        self._redirect_ctx.__exit__(None, None, None)
+        self._redir.__exit__(None, None, None)
         self._patch_login.stop()
         for p in self._patchers:
             p.stop()
 
-    # ---------------------------- test ----------------------------- #
-    def test_full_cli_flow_for_gestion(self):
-        """Exécution complète : doit se terminer sans exception."""
+    # ---------------------------------------------------------------------- #
+    def test_full_cli_flow_for_gestion(self) -> None:
+        """Exécute le scénario complet sans lever d’exception."""
         try:
             self.cli.run()
         except StopIteration:
-            # Fin normale : l’itérateur d’inputs est épuisé.
+            # Fin normale : plus d’inputs simulés
             pass
 
-        # Classes déjà patchées
+        # Vérifications sur les méthodes patchées
         from app.views.data_reader_view import DataReaderView
         from app.views.data_writer_view import DataWriterView
 
-        # ===== Vérifications Lecture =====
         DataReaderView.display_clients_only.assert_called_once()
         DataReaderView.display_contracts_only.assert_called_once()
         DataReaderView.display_events_only.assert_called_once()
-
-        # ===== Vérifications Gestion =====
         self.assertGreaterEqual(
             DataWriterView.update_user_cli.call_count, 1,
-            "update_user_cli (modifier collaborateur) doit être appelé ≥ 1 fois"
         )
         DataWriterView.list_events_no_support.assert_called_once()
         DataWriterView.assign_support_cli.assert_called_once()

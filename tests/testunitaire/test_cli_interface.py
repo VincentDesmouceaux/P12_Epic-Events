@@ -1,15 +1,22 @@
-# -*- coding: utf-8 -*-
-"""
-CLI Interface
-=============
-• gestion     : collaborateurs / clients / contrats / événements
-• commercial  : clients / contrats / événements
-• support     : événements
-• robustesse  : Ctrl-C ou Ctrl-D → sortie propre, jamais de trace-back
+# app/views/cli_interface.py
+"""Interface en ligne de commande (CLI) d’Epic Events.
+
+Fonctionnalités principales
+---------------------------
+* Authentification d’un collaborateur.
+* Lecture des données (clients, contrats, événements) – accès adapté au rôle.
+* Écriture / gestion des entités pour les rôles autorisés.
+* Sortie propre en cas de Ctrl‑C ou Ctrl‑D.
+
+Trois rôles :
+    • gestion     → accès complet + administration des collaborateurs  
+    • commercial  → gestion de « ses » clients / contrats / événements  
+    • support     → mise à jour des événements assignés
 """
 from __future__ import annotations
 
 import sys
+from typing import Dict, Optional
 
 from app.views.generic_view import GenericView
 from app.views.login_view import LoginView
@@ -18,42 +25,37 @@ from app.views.data_writer_view import DataWriterView
 
 
 class CLIInterface(GenericView):
+    """Boucle principale de l’application en mode terminal."""
+
     # ------------------------------------------------------------------ #
-    #  Construction
+    # Construction
     # ------------------------------------------------------------------ #
     def __init__(self, db_connection):
+        """Enregistre la connexion BD et instancie les vues enfants."""
         super().__init__()
         self.db = db_connection
         self.login_v = LoginView(db_connection)
         self.reader_v = DataReaderView(db_connection)
         self.writer_v = DataWriterView(db_connection)
-        self.current_user: dict | None = None
+        self.current_user: Optional[Dict] = None
 
     # ------------------------------------------------------------------ #
-    #  Saisie protégée
+    # Entrée protégée
     # ------------------------------------------------------------------ #
     def _safe_input(self, prompt: str) -> str:
-        """
-        Enveloppe autour de input()
-        • Ctrl-C  ➜ au-revoir + exit 0
-        • Ctrl-D  ➜ au-revoir + exit 0
-        """
+        """Capture Ctrl‑C / Ctrl‑D pour quitter proprement le programme."""
         try:
             return input(self.CYAN + prompt + self.END)
         except (KeyboardInterrupt, EOFError):
-            print()                     # retour à la ligne avant le message
+            print()  # retour à la ligne
             self.print_yellow("Arrêt demandé — au revoir.")
             sys.exit(0)
 
     # ------------------------------------------------------------------ #
-    #  Boucle principale
+    # Boucle principale
     # ------------------------------------------------------------------ #
-    def run(self):
-        """
-        Point d’entrée.  
-        Un try/except global protège au cas où un ancien appel non migré
-        vers _safe_input subsisterait dans une branche non testée.
-        """
+    def run(self) -> None:
+        """Démarre la boucle de menus CLI."""
         try:
             while True:
                 self._display_main_menu()
@@ -75,9 +77,10 @@ class CLIInterface(GenericView):
             sys.exit(0)
 
     # ------------------------------------------------------------------ #
-    #  MENUS
+    # Menus – affichage principal
     # ------------------------------------------------------------------ #
-    def _display_main_menu(self):
+    def _display_main_menu(self) -> None:
+        """Affiche le menu principal (connexion, lecture, gestion, quitter)."""
         self.print_header("\n=== Epic Events CLI ===")
         print(self.BLUE + "[1] Se connecter" + self.END)
         if self.current_user:
@@ -85,9 +88,11 @@ class CLIInterface(GenericView):
             print(self.BLUE + "[3] Gérer" + self.END)
         print(self.BLUE + "[0] Quitter" + self.END)
 
-    # ------------------- Authentification ------------------- #
-    def _menu_login(self):
-        self.print_header("\n-- Connexion --")
+    # ------------------------------------------------------------------ #
+    # Sous‑menus
+    # ------------------------------------------------------------------ #
+    def _menu_login(self) -> None:
+        """Formulaire de connexion simple (email + mot de passe)."""
         email = self._safe_input("Email : ").strip()
         pwd = self._safe_input("Mot de passe : ").strip()
         user = self.login_v.login_with_credentials_return_user(email, pwd)
@@ -95,14 +100,14 @@ class CLIInterface(GenericView):
             self.current_user = {
                 "id": user.id,
                 "role": user.role.name,
-                "role_id": user.role.id
+                "role_id": user.role.id,
             }
             self.print_green(f"Connecté en tant que {user.role.name}.")
         else:
             self.print_red("Échec de l'authentification.")
 
-    # --------------------- Lecture -------------------------- #
-    def _menu_read(self):
+    def _menu_read(self) -> None:
+        """Menu de lecture seul – disponible pour tout rôle connecté."""
         role = self.current_user["role"]
         while True:
             self.print_header("\n-- Lecture des données --")
@@ -125,8 +130,8 @@ class CLIInterface(GenericView):
             else:
                 self.print_red("Option invalide.")
 
-    # ------------------- Gestion / écriture ---------------- #
-    def _menu_write(self):
+    def _menu_write(self) -> None:
+        """Menu Gestion / écriture – options selon le rôle connecté."""
         role = self.current_user["role"]
         while True:
             self.print_header("\n-- Gestion --")

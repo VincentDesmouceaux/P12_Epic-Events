@@ -1,12 +1,29 @@
+# app/views/data_writer_view.py
 # -*- coding: utf-8 -*-
 """
-Vue CLI – DataWriterView (écriture)
------------------------------------
-• Gestion     : collaborateurs / clients / contrats / événements
-• Commercial  : clients / mise à jour de leurs contrats /
-                création d’événements sur leurs contrats signés /
-                assignation support
-• Support     : assignation / mise à jour des événements
+Vue CLI – **DataWriterView**
+
+Cette vue regroupe toutes les entrées / sorties côté console permettant
+d’utiliser la couche « métier » d’écriture (`DataWriter`) :
+
+* **Gestion**
+  - CRUD collaborateurs
+  - CRUD clients
+  - CRUD contrats
+  - CRUD événements
+* **Commercial**
+  - CRUD clients
+  - Mise à jour de leurs propres contrats
+  - Création d’événements sur leurs contrats signés
+  - Affectation de supports
+* **Support**
+  - Consultation / mise à jour des événements qui leur sont assignés
+
+Les contrôles de saisie (e‑mail, téléphone, date…) sont effectués ici afin
+d’éviter d’appeler la couche métier avec des valeurs déjà invalides.
+
+Aucune fonction n’est statique ; tout repose sur l’instance pour conserver
+l’état éventuel (connexion BD, utilisateur courant, etc.).
 """
 from __future__ import annotations
 
@@ -23,28 +40,50 @@ from app.models.contract import Contract
 from app.models.event import Event
 
 
-# ==================================================================== #
-#  CLASSE PRINCIPALE                                                   #
-# ==================================================================== #
 class DataWriterView(GenericView):
-    # ---------------------------------------------------------------- #
-    #  Construction
-    # ---------------------------------------------------------------- #
+    """
+    Vue CLI permettant aux utilisateurs authentifiés d’appeler la couche
+    métier d’écriture (`DataWriter`) en fournissant toutes les valeurs
+    nécessaires depuis la console.
+
+    Attributes
+    ----------
+    db : DatabaseConnection
+        Connexion à la base de données (fournie par l’injecteur).
+    writer : DataWriter
+        Couche métier responsable de la persistance.
+    auth : AuthController
+        Gestion de l’authentification (hash, contrôle des rôles, …).
+    """
+
+    # ------------------------------------------------------------------ #
+    # Construction                                                       #
+    # ------------------------------------------------------------------ #
     def __init__(self, db_connection):
+        """
+        Parameters
+        ----------
+        db_connection : DatabaseConnection
+            Instance connectée à la base de données.
+        """
         super().__init__()
         self.db = db_connection
         self.writer = DataWriter(db_connection)
         self.auth = AuthController()
 
-    # ---------------------------------------------------------------- #
-    #  Outils de validation dédiés
-    # ---------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
+    # Expressions régulières de validation                               #
+    # ------------------------------------------------------------------ #
     _REG_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
     _REG_PHONE = re.compile(r"^\+?\d{6,20}$")
     _REG_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
+    # ------------------------------------------------------------------ #
+    # Helpers de saisie                                                  #
+    # ------------------------------------------------------------------ #
     def _ask_email(self, prompt: str,
                    allow_empty: bool = False) -> Optional[str]:
+        """Demande un e‑mail et le valide."""
         while True:
             mail = self._ask(prompt, str, allow_empty)
             if mail in (None, "") and allow_empty:
@@ -55,16 +94,18 @@ class DataWriterView(GenericView):
 
     def _ask_phone(self, prompt: str,
                    allow_empty: bool = False) -> Optional[str]:
+        """Demande un numéro de téléphone international et le valide."""
         while True:
             tel = self._ask(prompt, str, allow_empty)
             if tel in (None, "") and allow_empty:
                 return None
             if self._REG_PHONE.match(tel):
                 return tel
-            self.print_red("Numéro invalide (6‑20 chiffres, ‘+’ optionnel).")
+            self.print_red("Numéro invalide (6‑20 chiffres, ‘+’ optionnel).")
 
     def _ask_positive_float(self, prompt: str,
                             allow_empty: bool = False) -> Optional[float]:
+        """Demande un nombre flottant positif."""
         while True:
             val = self._ask(prompt, float, allow_empty)
             if val is None and allow_empty:
@@ -75,6 +116,7 @@ class DataWriterView(GenericView):
 
     def _ask_positive_int(self, prompt: str,
                           allow_empty: bool = False) -> Optional[int]:
+        """Demande un entier positif."""
         while True:
             val = self._ask(prompt, int, allow_empty)
             if val is None and allow_empty:
@@ -85,6 +127,7 @@ class DataWriterView(GenericView):
 
     def _ask_date(self, prompt: str,
                   allow_empty: bool = False) -> Optional[datetime]:
+        """Demande une date au format `YYYY‑MM‑DD` et la convertit en `datetime`."""
         while True:
             raw = self._ask(prompt, str, allow_empty)
             if raw in (None, "") and allow_empty:
@@ -96,13 +139,29 @@ class DataWriterView(GenericView):
                     pass
             self.print_red("Format YYYY‑MM‑DD requis.")
 
-    # ---------------------------------------------------------------- #
-    #  Helper générique
-    # ---------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
+    #  Saisie générique : centralise la gestion d’erreurs console        #
+    # ------------------------------------------------------------------ #
     def _ask(self, prompt: str, cast=str,
              allow_empty: bool = False) -> Optional[Any]:
+        """
+        Demande une saisie utilisateur et tente de la caster.
+
+        Parameters
+        ----------
+        prompt : str
+            Texte affiché à l’écran.
+        cast : Callable
+            Fonction de conversion (str, int, float, …).
+        allow_empty : bool
+            Si True, l’utilisateur peut laisser la valeur vide.
+
+        Returns
+        -------
+        Any | None
+            Valeur convertie ou None si vide autorisé.
+        """
         while True:
-            # ---------- PARE‑FEU UNICODE ----------------------------- #
             try:
                 raw = input(self.CYAN + prompt + self.END).strip()
             except (KeyboardInterrupt, EOFError):
@@ -110,33 +169,36 @@ class DataWriterView(GenericView):
                 self.print_yellow("Saisie interrompue – au revoir.")
                 raise SystemExit(0)
             except UnicodeDecodeError:
-                # bug rarissime : on redemande la saisie proprement
                 self.print_red("Erreur d’encodage – recommencez.")
                 continue
-            # --------------------------------------------------------- #
+
             if raw == "" and allow_empty:
                 return None
             if raw == "":
                 self.print_red("Valeur obligatoire.")
                 continue
-            if not callable(cast):        # sécurité supplémentaire
-                cast = str
+
             try:
                 return cast(raw) if cast else raw
             except (ValueError, TypeError):
                 self.print_red("Format invalide.")
 
+    # ------------------------------------------------------------------ #
+    # Mise en forme générique d’un objet SQLAlchemy                      #
+    # ------------------------------------------------------------------ #
     def _fmt(self, entity) -> str:
+        """Retourne une représentation textuelle d’un objet (hors mot de passe)."""
         return str({
             c.name: getattr(entity, c.name)
             for c in entity.__table__.columns
             if c.name != "password_hash"
         })
 
-    # ================================================================= #
-    #  ========================= COLLABORATEURS ======================= #
-    # ================================================================= #
-    def create_user_cli(self, cur: Dict[str, Any]):
+    # ================================================================== #
+    #  ======================= COLLABORATEURS ========================== #
+    # ================================================================== #
+    def create_user_cli(self, cur: Dict[str, Any]) -> None:
+        """Création d’un collaborateur."""
         fname = self._ask("Prénom : ")
         lname = self._ask("Nom : ")
         email = self._ask_email("Email : ")
@@ -155,7 +217,8 @@ class DataWriterView(GenericView):
                 s.rollback()
                 self.print_red(f"❌ {exc}")
 
-    def update_user_cli(self, cur: Dict[str, Any]):
+    def update_user_cli(self, cur: Dict[str, Any]) -> None:
+        """Mise à jour d’un collaborateur à partir de son employee number."""
         emp_num = self._ask("Employee Number : ")
         with self.db.create_session() as s_chk:
             usr = s_chk.query(User).filter_by(employee_number=emp_num).first()
@@ -197,7 +260,8 @@ class DataWriterView(GenericView):
                 s.rollback()
                 self.print_red(f"❌ {exc}")
 
-    def delete_user_cli(self, cur: Dict[str, Any]):
+    def delete_user_cli(self, cur: Dict[str, Any]) -> None:
+        """Suppression d’un collaborateur par employee number."""
         emp = self._ask("Employee Number à supprimer : ")
         with self.db.create_session() as s:
             try:
@@ -208,10 +272,11 @@ class DataWriterView(GenericView):
                 s.rollback()
                 self.print_red(f"❌ {exc}")
 
-    # ================================================================= #
-    #  ============================ CLIENTS =========================== #
-    # ================================================================= #
-    def create_client_cli(self, cur: Dict[str, Any]):
+    # ================================================================== #
+    #  ============================ CLIENTS ============================ #
+    # ================================================================== #
+    def create_client_cli(self, cur: Dict[str, Any]) -> None:
+        """Création d’un client."""
         fn = self._ask("Nom complet : ")
         mail = self._ask_email("Email       : ")
         tel = self._ask_phone("Téléphone   : ", True)
@@ -228,7 +293,8 @@ class DataWriterView(GenericView):
                 s.rollback()
                 self.print_red(f"❌ {exc}")
 
-    def update_client_cli(self, cur: Dict[str, Any]):
+    def update_client_cli(self, cur: Dict[str, Any]) -> None:
+        """Mise à jour d’un client existant."""
         cid = self._ask_positive_int("ID client : ")
         with self.db.create_session() as chk:
             cli = chk.get(Client, cid)
@@ -262,10 +328,11 @@ class DataWriterView(GenericView):
                 s.rollback()
                 self.print_red(f"❌ {exc}")
 
-    # ================================================================= #
-    #  ============================ CONTRATS ========================== #
-    # ================================================================= #
-    def create_contract_cli(self, cur: Dict[str, Any]):
+    # ================================================================== #
+    #  ============================ CONTRATS =========================== #
+    # ================================================================== #
+    def create_contract_cli(self, cur: Dict[str, Any]) -> None:
+        """Création d’un contrat (gestion uniquement)."""
         if cur["role"] == "commercial":
             self.print_red("Les commerciaux ne peuvent pas créer de contrat.")
             return
@@ -285,7 +352,8 @@ class DataWriterView(GenericView):
                 s.rollback()
                 self.print_red(f"❌ {exc}")
 
-    def update_contract_cli(self, cur: Dict[str, Any]):
+    def update_contract_cli(self, cur: Dict[str, Any]) -> None:
+        """Mise à jour d’un contrat."""
         ctr_id = self._ask_positive_int("ID contrat : ")
 
         if cur["role"] == "commercial":
@@ -350,10 +418,11 @@ class DataWriterView(GenericView):
                 s.rollback()
                 self.print_red(f"❌ {exc}")
 
-    # ================================================================= #
-    #  ========================== ÉVÉNEMENTS ========================== #
-    # ================================================================= #
-    def create_event_cli(self, cur: Dict[str, Any]):
+    # ================================================================== #
+    #  ============================ ÉVÉNEMENTS ========================= #
+    # ================================================================== #
+    def create_event_cli(self, cur: Dict[str, Any]) -> None:
+        """Création d’un événement (par le commercial uniquement)."""
         if cur["role"] != "commercial":
             self.print_red("Seul le commercial peut créer un événement.")
             return
@@ -405,7 +474,8 @@ class DataWriterView(GenericView):
                 s.rollback()
                 self.print_red(f"❌ {exc}")
 
-    def list_events_no_support(self, cur: Dict[str, Any]):
+    def list_events_no_support(self, cur: Dict[str, Any]) -> None:
+        """Affiche les événements n’ayant pas encore de support assigné."""
         with self.db.create_session() as s:
             evs = s.query(Event).filter_by(support_id=None).all()
             if not evs:
@@ -417,7 +487,17 @@ class DataWriterView(GenericView):
 
     def assign_support_cli(self, cur: Dict[str, Any],
                            event_id: Optional[int] = None,
-                           support_emp: Optional[str] = None):
+                           support_emp: Optional[str] = None) -> None:
+        """
+        Assigne un support à un événement (gestion ou commercial).
+
+        Parameters
+        ----------
+        event_id : int | None
+            Identifiant de l’événement (demande si None).
+        support_emp : str | None
+            Employee Number du support (demande si None).
+        """
         if event_id is None:
             event_id = self._ask_positive_int("ID événement : ")
         if support_emp is None:
@@ -443,10 +523,11 @@ class DataWriterView(GenericView):
                 s.rollback()
                 self.print_red(f"❌ {exc}")
 
-    # ================================================================= #
-    #  =======  ÉVÉNEMENTS – SOUS-MENU SUPPORT  =======                 #
-    # ================================================================= #
+    # ================================================================== #
+    #  =========  ÉVÉNEMENTS – MENU DÉDIÉ AU SUPPORT  =========          #
+    # ================================================================== #
     def menu_event_support(self, cur: Dict[str, Any]) -> None:
+        """Sous‑menu permettant au support de gérer ses événements."""
         while True:
             self.print_header("-- Événements (support) --")
             print(self.BLUE + "[1] Mes événements" + self.END)
@@ -463,7 +544,11 @@ class DataWriterView(GenericView):
             else:
                 self.print_red("Option invalide.")
 
+    # ------------------------------------------------------------------ #
+    # Fonctions privées – gestion des événements côté support            #
+    # ------------------------------------------------------------------ #
     def _display_my_events(self, cur: Dict[str, Any]) -> None:
+        """Affiche la liste des événements assignés au support courant."""
         with self.db.create_session() as s:
             evts = s.query(Event).filter_by(support_id=cur["id"]).all()
             if not evts:
@@ -474,6 +559,7 @@ class DataWriterView(GenericView):
                 print(self._fmt(ev))
 
     def _update_my_event_cli(self, cur: Dict[str, Any]) -> None:
+        """Mise à jour d’un événement par son support assigné."""
         ev_id = self._ask_positive_int("ID événement à modifier : ")
 
         with self.db.create_session() as chk:
@@ -488,7 +574,6 @@ class DataWriterView(GenericView):
         self.print_yellow("→ Laisser vide pour conserver la valeur.")
         new_loc = self._ask("Lieu : ", allow_empty=True)
         new_notes = self._ask("Notes : ", allow_empty=True)
-
         n_start = self._ask_date("Date début YYYY-MM-DD : ", True)
         n_end = self._ask_date("Date fin   YYYY-MM-DD : ", True)
 

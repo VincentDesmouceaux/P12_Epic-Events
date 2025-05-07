@@ -1,13 +1,34 @@
+# -*- coding: utf-8 -*-
 """
-Contrôleur de lecture.
+DataReader
+==========
 
-⚠️  Règle métier (mise à jour) :
-    une fois authentifiés, les trois rôles (gestion, commercial, support)
-    peuvent consulter TOUS les clients, contrats et événements.
+Couche « lecture » de l’application.  
+Une fois authentifié, chaque collaborateur – quel que soit son rôle
+(gestion / commercial / support) – peut consulter l’ensemble des
+*clients*, *contrats* et *événements*.
 
-Un commercial *peut* vouloir filtrer « ses » clients/contrats – cela se
-fera côté vue ou via des paramètres facultatifs (non gérés ici pour l’instant).
+Un filtre optionnel peut toutefois être appliqué :
+
+* **commercial** : si le dictionnaire *current_user* contient la clé
+  ``"force_filter"`` (True), seules les entités rattachées au commercial
+  courant sont renvoyées ;
+* **support**  : idem, mais limité aux événements assignés au
+  technicien support.
+
+Notes
+-----
+* Aucun décorateur n’est utilisé (pas de ``@staticmethod``).  
+* Aucune trace de debug n’est émise ; les méthodes se contentent de
+  renvoyer les listes demandées ou de lever une :class:`PermissionError`
+  lorsqu’un utilisateur non authentifié les invoque.
 """
+
+from __future__ import annotations
+
+from typing import Dict, List
+
+from sqlalchemy.orm import Session
 
 from app.models.client import Client
 from app.models.contract import Contract
@@ -15,40 +36,40 @@ from app.models.event import Event
 
 
 class DataReader:
-    def __init__(self, db_connection):
-        self.db_connection = db_connection
+    """Contrôleur de lecture (read‑only)."""
 
     # ------------------------------------------------------------------ #
-    #  outils internes de log
+    # Construction                                                       #
     # ------------------------------------------------------------------ #
-    def _debug(self, msg, **kw):
-        print(f"[DataReader][DEBUG] {msg} -> {kw}")
-
-    def _trace(self, msg):
-        print(f"[DataReader][TRACE] {msg}")
+    def __init__(self, db_connection) -> None:
+        self._db_connection = db_connection
 
     # ------------------------------------------------------------------ #
-    #  sécurité très minimale : vérifie qu’un user est bien présent
+    # Helper interne                                                     #
     # ------------------------------------------------------------------ #
-    def _check_auth(self, current_user: dict):
-        self._debug("_check_auth", current_user=current_user)
+    def _ensure_authenticated(self, current_user: Dict) -> None:
+        """Vérifie qu’un utilisateur est fourni et authentifié."""
         if not current_user:
             raise PermissionError("Utilisateur non authentifié.")
 
     # ------------------------------------------------------------------ #
-    #  clients
+    # Public API                                                         #
     # ------------------------------------------------------------------ #
-    def get_all_clients(self, session, current_user):
-        self._trace("get_all_clients")
-        self._check_auth(current_user)
+    def get_all_clients(self, session: Session, current_user: Dict) -> List[Client]:
+        """
+        Renvoie la liste des clients.
 
-        session.expire_all()                 # toujours relire la BD
-        role = current_user.get("role")
+        • Tous les rôles voient l’intégralité des clients.  
+        • Un commercial peut demander un filtrage forcé en ajoutant
+          ``"force_filter": True`` à *current_user*.
+        """
+        self._ensure_authenticated(current_user)
+        session.expire_all()
 
-        # → accès complet quel que soit le rôle
-        # (on garde ici la possibilité de filtrer par commercial si on le
-        #  souhaite ultérieurement, mais ce n’est PAS imposé).
-        if role == "commercial" and "force_filter" in current_user:
+        if (
+            current_user.get("role") == "commercial"
+            and current_user.get("force_filter")
+        ):
             return (
                 session.query(Client)
                 .filter(Client.commercial_id == current_user["id"])
@@ -58,16 +79,20 @@ class DataReader:
         return session.query(Client).all()
 
     # ------------------------------------------------------------------ #
-    #  contrats
-    # ------------------------------------------------------------------ #
-    def get_all_contracts(self, session, current_user):
-        self._trace("get_all_contracts")
-        self._check_auth(current_user)
-
+    def get_all_contracts(
+        self, session: Session, current_user: Dict
+    ) -> List[Contract]:
+        """
+        Renvoie la liste des contrats, avec la même règle de filtrage
+        facultatif que :meth:`get_all_clients`.
+        """
+        self._ensure_authenticated(current_user)
         session.expire_all()
-        role = current_user.get("role")
 
-        if role == "commercial" and "force_filter" in current_user:
+        if (
+            current_user.get("role") == "commercial"
+            and current_user.get("force_filter")
+        ):
             return (
                 session.query(Contract)
                 .filter(Contract.commercial_id == current_user["id"])
@@ -77,17 +102,20 @@ class DataReader:
         return session.query(Contract).all()
 
     # ------------------------------------------------------------------ #
-    #  événements
-    # ------------------------------------------------------------------ #
-    def get_all_events(self, session, current_user):
-        self._trace("get_all_events")
-        self._check_auth(current_user)
+    def get_all_events(self, session: Session, current_user: Dict) -> List[Event]:
+        """
+        Renvoie la liste des événements.
 
+        *Commercial* : avec ``"force_filter": True``, seuls les événements
+        liés aux contrats du commercial sont retournés.  
+        *Support*    : avec ``"force_filter": True``, seuls les événements
+        assignés au support courant sont retournés.
+        """
+        self._ensure_authenticated(current_user)
         session.expire_all()
         role = current_user.get("role")
 
-        if role == "commercial" and "force_filter" in current_user:
-            # on récupère uniquement les événements liés aux contrats du commercial
+        if role == "commercial" and current_user.get("force_filter"):
             return (
                 session.query(Event)
                 .join(Contract, Event.contract_id == Contract.id)
@@ -95,8 +123,11 @@ class DataReader:
                 .all()
             )
 
-        if role == "support" and "force_filter" in current_user:
-            # uniquement les événements assignés à ce technicien support
-            return session.query(Event).filter(Event.support_id == current_user["id"]).all()
+        if role == "support" and current_user.get("force_filter"):
+            return (
+                session.query(Event)
+                .filter(Event.support_id == current_user["id"])
+                .all()
+            )
 
         return session.query(Event).all()

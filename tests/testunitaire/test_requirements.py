@@ -1,10 +1,19 @@
 # tests/testunitaire/test_requirements.py
+# -*- coding: utf-8 -*-
+"""
+Tests d’acceptation – validation des « requirements » généraux.
+
+Couvre :
+    • création et authentification d’utilisateurs ;
+    • persistance et récupération de clients, contrats et événements ;
+    • détection d’un jeton JWT invalide.
+"""
+
 import unittest
 from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Import des modules de l'application
 from app.models import Base
 from app.models.role import Role
 from app.models.user import User
@@ -15,36 +24,40 @@ from app.authentification.auth_controller import AuthController
 from app.controllers.data_writer import DataWriter
 from app.controllers.data_reader import DataReader
 
-# Dummy connexion DB pour les tests unitaires (simule DatabaseConnection)
-
 
 class DummyDBConnection:
+    """Connexion BD simulée pour injection dans les contrôleurs."""
+
     def __init__(self, session_factory):
         self.SessionLocal = session_factory
 
     def create_session(self):
+        """Renvoie une nouvelle session SQLAlchemy."""
         return self.SessionLocal()
 
 
 class RequirementsTestCase(unittest.TestCase):
+    """Tests haut niveau vérifiant les besoins fonctionnels de base."""
+
+    # ------------------------------------------------------------------ #
+    # SET‑UP / TEAR‑DOWN                                                 #
+    # ------------------------------------------------------------------ #
     def setUp(self):
-        # Création d'une base SQLite en mémoire
-        self.engine = create_engine('sqlite:///:memory:', echo=False)
-        # Création du schéma (tables)
+        self.engine = create_engine("sqlite:///:memory:", echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
+
         self.db_connection = DummyDBConnection(self.Session)
         self.session = self.db_connection.create_session()
 
-        # Insertion des rôles requis : commercial, support, gestion
+        # Insertion des trois rôles indispensables
         self.roles = {}
-        for role_name in ["commercial", "support", "gestion"]:
-            role = Role(name=role_name, description=f"Département {role_name}")
+        for name in ("commercial", "support", "gestion"):
+            role = Role(name=name, description=f"Département {name}")
             self.session.add(role)
             self.session.commit()
-            self.roles[role_name] = role
+            self.roles[name] = role
 
-        # Initialisation des contrôleurs
         self.auth_controller = AuthController()
         self.data_writer = DataWriter(self.db_connection)
         self.data_reader = DataReader(self.db_connection)
@@ -54,13 +67,11 @@ class RequirementsTestCase(unittest.TestCase):
         Base.metadata.drop_all(self.engine)
         self.engine.dispose()
 
+    # ------------------------------------------------------------------ #
+    # TESTS                                                              #
+    # ------------------------------------------------------------------ #
     def test_general_requirements(self):
-        """
-        Besoins généraux :
-         - Chaque collaborateur a ses identifiants et un rôle.
-         - La plateforme permet de stocker et de lire les informations sur les clients, contrats et événements.
-        """
-        # Inscription d'un utilisateur via register_user (mot de passe en clair)
+        """Vérifie la chaîne complète : user → client → contrat → évènement."""
         user = self.auth_controller.register_user(
             self.session,
             employee_number="GEN001",
@@ -68,22 +79,16 @@ class RequirementsTestCase(unittest.TestCase):
             last_name="User",
             email="general.user@example.com",
             password="GeneralPass123",
-            role_id=self.roles["gestion"].id
+            role_id=self.roles["gestion"].id,
         )
-        self.assertIsNotNone(user, "L'utilisateur doit être créé.")
+        self.assertIsNotNone(user)
 
-        # Test de l'authentification avec le bon mot de passe
         auth_user = self.auth_controller.authenticate_user(
-            self.session,
-            email="general.user@example.com",
-            password="GeneralPass123"
+            self.session, email="general.user@example.com", password="GeneralPass123"
         )
-        self.assertIsNotNone(
-            auth_user, "L'authentification doit réussir pour le bon mot de passe.")
-        self.assertEqual(auth_user.role.name, "gestion",
-                         "Le rôle de l'utilisateur doit être 'gestion'.")
+        self.assertIsNotNone(auth_user)
+        self.assertEqual(auth_user.role.name, "gestion")
 
-        # Création d'objets liés
         commercial = self.auth_controller.register_user(
             self.session,
             employee_number="GEN002",
@@ -91,14 +96,14 @@ class RequirementsTestCase(unittest.TestCase):
             last_name="Cial",
             email="commercial@example.com",
             password="CommercialPass123",
-            role_id=self.roles["commercial"].id
+            role_id=self.roles["commercial"].id,
         )
         client = Client(
             full_name="Client General",
             email="client.general@example.com",
             phone="1234567890",
             company_name="General Corp",
-            commercial_id=commercial.id
+            commercial_id=commercial.id,
         )
         self.session.add(client)
         self.session.commit()
@@ -106,9 +111,9 @@ class RequirementsTestCase(unittest.TestCase):
         contract = Contract(
             client_id=client.id,
             commercial_id=commercial.id,
-            total_amount=15000.0,
-            remaining_amount=15000.0,
-            is_signed=False
+            total_amount=15_000.0,
+            remaining_amount=15_000.0,
+            is_signed=False,
         )
         self.session.add(contract)
         self.session.commit()
@@ -116,37 +121,33 @@ class RequirementsTestCase(unittest.TestCase):
         event = Event(
             contract_id=contract.id,
             support_id=None,
-            date_start=datetime(2023, 1, 1, 10, 0),
-            date_end=datetime(2023, 1, 1, 18, 0),
+            date_start=datetime(2023, 1, 1, 10),
+            date_end=datetime(2023, 1, 1, 18),
             location="General Location",
             attendees=100,
-            notes="General event"
+            notes="General event",
         )
         self.session.add(event)
         self.session.commit()
 
-        # Vérifier via DataReader que les objets sont récupérables
         current_user = {"id": user.id, "role": "gestion"}
-        clients_list = self.data_reader.get_all_clients(
-            self.session, current_user)
-        contracts_list = self.data_reader.get_all_contracts(
-            self.session, current_user)
-        events_list = self.data_reader.get_all_events(
-            self.session, current_user)
-        self.assertGreaterEqual(len(clients_list), 1,
-                                "Au moins un client doit être présent.")
-        self.assertGreaterEqual(len(contracts_list), 1,
-                                "Au moins un contrat doit être présent.")
-        self.assertGreaterEqual(len(events_list), 1,
-                                "Au moins un événement doit être présent.")
+
+        self.assertGreaterEqual(
+            len(self.data_reader.get_all_clients(self.session, current_user)), 1
+        )
+        self.assertGreaterEqual(
+            len(self.data_reader.get_all_contracts(
+                self.session, current_user)), 1
+        )
+        self.assertGreaterEqual(
+            len(self.data_reader.get_all_events(self.session, current_user)), 1
+        )
 
     def test_verify_invalid_token(self):
-        """
-        Teste que verify_token lève une exception sur un token invalide.
-        """
-        with self.assertRaises(Exception) as context:
+        """`verify_token` doit lever une exception pour un JWT invalide."""
+        with self.assertRaises(Exception) as ctx:
             self.auth_controller.verify_token("token_invalide")
-        self.assertIn("Jeton invalide", str(context.exception))
+        self.assertIn("Jeton invalide", str(ctx.exception))
 
 
 if __name__ == "__main__":

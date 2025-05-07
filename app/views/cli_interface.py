@@ -1,10 +1,18 @@
+# app/views/cli_interface.py
 # -*- coding: utf-8 -*-
 """
-CLIInterface – navigation adaptée au rôle connecté
-• gestion    : collaborateurs / clients / contrats / événements
-• commercial : clients / contrats / événements
-• support    : événements (écriture) — MAIS lecture COMPLETE :
-               tous les collaborateurs voient Clients, Contrats, Événements
+CLI Interface
+=============
+
+Interface texte principale de l’application **Epic Events**.  
+Le menu affiché dépend du rôle du collaborateur connecté :
+
+* **gestion**    : collaborateurs / clients / contrats / événements  
+* **commercial** : clients / contrats / événements  
+* **support**    : événements (mais accès *lecture* complet)
+
+Toutes les interactions clavier sont protégées ; aucune trace « debug »
+n’est affichée pour garder la sortie propre en production.
 """
 from __future__ import annotations
 
@@ -15,19 +23,30 @@ from app.views.data_writer_view import DataWriterView
 
 
 class CLIInterface(GenericView):
+    """Point d’entrée CLI ; orchestre les vues Login, Lecture et Écriture."""
+
+    # ------------------------------------------------------------------ #
+    # Construction                                                       #
     # ------------------------------------------------------------------ #
     def __init__(self, db_connection):
+        """
+        Parameters
+        ----------
+        db_connection :
+            Objet fournissant ``create_session()`` pour accéder à la base.
+        """
         super().__init__()
         self.db = db_connection
         self.login_v = LoginView(db_connection)
         self.reader_v = DataReaderView(db_connection)
         self.writer_v = DataWriterView(db_connection)
-        self.current_user: dict | None = None
+        self.current_user: dict | None = None  # stocke le user connecté
 
     # ------------------------------------------------------------------ #
-    #  MENU PRINCIPAL
+    # Menu principal                                                     #
     # ------------------------------------------------------------------ #
     def _main_menu(self) -> None:
+        """Affiche le menu racine (connexion / lecture / gestion)."""
         self.print_header("\n======== Epic Events CLI ========")
         print(self.BLUE + "[1] Se connecter" + self.END)
         if self.current_user:
@@ -36,6 +55,7 @@ class CLIInterface(GenericView):
         print(self.BLUE + "[0] Quitter" + self.END)
 
     def run(self) -> None:
+        """Boucle principale ; reste actif jusqu’à *Quitter*."""
         while True:
             self._main_menu()
             choice = input(self.CYAN + "Choix : " + self.END).strip()
@@ -53,25 +73,29 @@ class CLIInterface(GenericView):
                     self.print_red("Option invalide.")
 
     # ------------------------------------------------------------------ #
-    #  AUTHENTIFICATION
+    # Authentification                                                   #
     # ------------------------------------------------------------------ #
     def _login(self) -> None:
+        """Demande e‑mail / mot de passe et initialise *current_user*."""
         self.print_header("-- Connexion --")
         mail = input(self.CYAN + "Email : " + self.END).strip()
         pwd = input(self.CYAN + "Mot de passe : " + self.END).strip()
         user = self.login_v.login_with_credentials_return_user(mail, pwd)
         if user:
-            self.current_user = {"id": user.id,
-                                 "role": user.role.name,
-                                 "role_id": user.role.id}
+            self.current_user = {
+                "id": user.id,
+                "role": user.role.name,
+                "role_id": user.role.id,
+            }
             self.print_green(f"Connecté – rôle {user.role.name}")
         else:
             self.print_red("Échec de l’authentification.")
 
     # ------------------------------------------------------------------ #
-    #  LECTURE (des données) — mêmes choix pour tous les rôles
+    # Lecture                                                            #
     # ------------------------------------------------------------------ #
     def _read_menu(self) -> None:
+        """Sous‑menu *Lecture* : mêmes options pour tous les rôles."""
         while True:
             self.print_header("-- Lecture des données --")
             print(self.BLUE + "[1] Clients" + self.END)
@@ -79,9 +103,9 @@ class CLIInterface(GenericView):
             print(self.BLUE + "[3] Événements" + self.END)
             print(self.BLUE + "[0] Retour" + self.END)
 
-            c = input(self.CYAN + "Choix : " + self.END).strip()
+            choice = input(self.CYAN + "Choix : " + self.END).strip()
             try:
-                match c:
+                match choice:
                     case "1":
                         self.reader_v.display_clients_only(self.current_user)
                     case "2":
@@ -92,13 +116,14 @@ class CLIInterface(GenericView):
                         break
                     case _:
                         self.print_red("Option invalide.")
-            except Exception as exc:                       # pragma: no cover
-                self.print_red(str(exc))
+            except Exception as err:      # protège contre toute levée imprévue
+                self.print_red(str(err))
 
     # ------------------------------------------------------------------ #
-    #  GESTION / ÉCRITURE
+    # Gestion / écriture                                                 #
     # ------------------------------------------------------------------ #
     def _write_menu(self) -> None:
+        """Sous‑menu *Gestion* : options variables selon le rôle."""
         role = self.current_user["role"]
         while True:
             self.print_header("-- Gestion --")
@@ -119,31 +144,32 @@ class CLIInterface(GenericView):
             else:  # support
                 options.append(("1", "Événements", self._menu_event_support))
 
-            for k, label, _ in options:
-                print(self.BLUE + f"[{k}] {label}" + self.END)
+            for key, label, _ in options:
+                print(self.BLUE + f"[{key}] {label}" + self.END)
             print(self.BLUE + "[0] Retour" + self.END)
 
             choice = input(self.CYAN + "Choix : " + self.END).strip()
             if choice == "0":
                 break
-            for k, _lbl, handler in options:
-                if choice == k:
+            for key, _lbl, handler in options:
+                if choice == key:
                     handler()
                     break
             else:
                 self.print_red("Option invalide.")
 
     # ------------------------------------------------------------------ #
-    #  ======= SOUS‑MENUS COMMUNS =======                                #
+    # Sous‑menus collaborateur / client                                  #
     # ------------------------------------------------------------------ #
     def _menu_collaborator(self) -> None:
+        """CRUD basique sur les collaborateurs (rôle *gestion* seulement)."""
         self.print_header("-- Collaborateurs --")
         print(self.BLUE + "[1] Créer" + self.END)
         print(self.BLUE + "[2] Modifier" + self.END)
         print(self.BLUE + "[3] Supprimer" + self.END)
         print(self.BLUE + "[0] Retour" + self.END)
-        c = input(self.CYAN + "Choix : " + self.END).strip()
-        match c:
+        choice = input(self.CYAN + "Choix : " + self.END).strip()
+        match choice:
             case "1":
                 self.writer_v.create_user_cli(self.current_user)
             case "2":
@@ -152,39 +178,43 @@ class CLIInterface(GenericView):
                 self.writer_v.delete_user_cli(self.current_user)
 
     def _menu_client(self) -> None:
+        """CRUD client pour les commerciaux et la gestion."""
         self.print_header("-- Clients --")
         print(self.BLUE + "[1] Créer" + self.END)
         print(self.BLUE + "[2] Modifier" + self.END)
         print(self.BLUE + "[0] Retour" + self.END)
-        c = input(self.CYAN + "Choix : " + self.END).strip()
-        match c:
+        choice = input(self.CYAN + "Choix : " + self.END).strip()
+        match choice:
             case "1":
                 self.writer_v.create_client_cli(self.current_user)
             case "2":
                 self.writer_v.update_client_cli(self.current_user)
 
-    # ------------------- CONTRATS (gestion) --------------------------- #
+    # ------------------------------------------------------------------ #
+    # Contrats                                                           #
+    # ------------------------------------------------------------------ #
     def _menu_contract_gestion(self) -> None:
+        """Contrats – actions accessibles au rôle *gestion*."""
         self.print_header("-- Contrats (gestion) --")
         print(self.BLUE + "[1] Créer" + self.END)
         print(self.BLUE + "[2] Modifier" + self.END)
         print(self.BLUE + "[0] Retour" + self.END)
-        c = input(self.CYAN + "Choix : " + self.END).strip()
-        match c:
+        choice = input(self.CYAN + "Choix : " + self.END).strip()
+        match choice:
             case "1":
                 self.writer_v.create_contract_cli(self.current_user)
             case "2":
                 self.writer_v.update_contract_cli(self.current_user)
 
-    # ------------------- CONTRATS (commercial) ------------------------ #
     def _menu_contract_commercial(self) -> None:
+        """Contrats – actions côté *commercial* (modif & affichages dédiés)."""
         while True:
             self.print_header("-- Contrats (commercial) --")
             print(self.BLUE + "[1] Modifier" + self.END)
             print(self.BLUE + "[2] Affichage" + self.END)
             print(self.BLUE + "[0] Retour" + self.END)
-            c = input(self.CYAN + "Choix : " + self.END).strip()
-            match c:
+            choice = input(self.CYAN + "Choix : " + self.END).strip()
+            match choice:
                 case "1":
                     self.writer_v.update_contract_cli(self.current_user)
                 case "2":
@@ -195,13 +225,14 @@ class CLIInterface(GenericView):
                     self.print_red("Option invalide.")
 
     def _submenu_contract_display(self) -> None:
+        """Affichages filtrés (non signés / restant à payer) pour commerciaux."""
         while True:
             self.print_header("-- Affichage contrats --")
             print(self.BLUE + "[1] Non signés" + self.END)
             print(self.BLUE + "[2] Restant à payer" + self.END)
             print(self.BLUE + "[0] Retour" + self.END)
-            c = input(self.CYAN + "Choix : " + self.END).strip()
-            match c:
+            choice = input(self.CYAN + "Choix : " + self.END).strip()
+            match choice:
                 case "1":
                     self.reader_v.display_unsigned_contracts(self.current_user)
                 case "2":
@@ -211,27 +242,30 @@ class CLIInterface(GenericView):
                 case _:
                     self.print_red("Option invalide.")
 
-    # ------------------- ÉVÉNEMENTS ---------------------------------- #
+    # ------------------------------------------------------------------ #
+    # Événements                                                         #
+    # ------------------------------------------------------------------ #
     def _menu_event_gestion(self) -> None:
+        """Menu événements côté *gestion* (assignation de supports)."""
         self.print_header("-- Événements (gestion) --")
         print(self.BLUE + "[1] Afficher sans support" + self.END)
         print(self.BLUE + "[2] Assigner / modifier support" + self.END)
         print(self.BLUE + "[0] Retour" + self.END)
-        c = input(self.CYAN + "Choix : " + self.END).strip()
-        match c:
+        choice = input(self.CYAN + "Choix : " + self.END).strip()
+        match choice:
             case "1":
                 self.writer_v.list_events_no_support(self.current_user)
             case "2":
                 self.writer_v.assign_support_cli(self.current_user)
 
     def _menu_event_commercial(self) -> None:
+        """Création d’événements pour les contrats signés du commercial."""
         self.print_header("-- Événements (commercial) --")
         print(self.BLUE + "[1] Créer un événement" + self.END)
         print(self.BLUE + "[0] Retour" + self.END)
-        c = input(self.CYAN + "Choix : " + self.END).strip()
-        if c == "1":
+        if input(self.CYAN + "Choix : " + self.END).strip() == "1":
             self.writer_v.create_event_cli(self.current_user)
 
     def _menu_event_support(self) -> None:
-        """Sous‑menu spécialisé hébergé dans DataWriter (rôle support)."""
+        """Sous‑menu délégué à DataWriterView pour le rôle *support*."""
         self.writer_v.menu_event_support(self.current_user)

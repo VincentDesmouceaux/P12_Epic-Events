@@ -1,19 +1,18 @@
-"""
-Navigation complète dans le menu **Gestion** pour un utilisateur
-« commercial ».  
-On s’assure qu’aucune exception n’est levée et que chaque sous-menu
-s’affiche au moins une fois.
-"""
+# tests/testunitaire/test_cli_commercial_flow.py
+"""Parcours complet du sous‑menu “Gestion” pour un utilisateur *commercial*.
 
+But :
+    • S’assurer qu’aucune exception n’est levée.
+    • Chaque sous‑menu (clients, contrats, événements) est visité au moins
+      une fois.
+"""
 import builtins
 import unittest
 from io import StringIO
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
-# ------------------------------------------------------------------ #
-#  Doubles                                                            #
-# ------------------------------------------------------------------ #
+# --- Doubles simples -------------------------------------------------- #
 
 
 class _DummySession:
@@ -21,52 +20,53 @@ class _DummySession:
 
 
 class _DummyDB:
-    def create_session(self): return _DummySession()
+    def create_session(self):  # noqa: D401  (méthode courte)
+        return _DummySession()
 
 
-# ------------------------------------------------------------------ #
 class TestCLICommercialFlow(unittest.TestCase):
-    def setUp(self):
-        # séquence d’inputs clavier
-        self._inputs = iter([
-            "1", "0",      # Clients  → retour
-            "2", "0",      # Contrats → retour
-            "3", "0",      # Événements → retour
-            "0"            # Quitter Gestion
-        ])
+    """Tests du flux CLI pour le rôle *commercial*."""
+
+    # ------------------------------------------------------------------ #
+    def setUp(self) -> None:
+        """Prépare les entrées simulées, patches et redirections stdout."""
+        self._inputs = iter(
+            ["1", "0",  # Clients
+             "2", "0",  # Contrats
+             "3", "0",  # Événements
+             "0"]       # Quitter Gestion
+        )
         self._orig_input = builtins.input
         builtins.input = lambda *_: next(self._inputs)
 
-        # patch LoginView pour éviter l’authent
         self._patch_login = patch(
             "app.views.login_view.LoginView.login_with_credentials_return_user"
         )
         self._patch_login.start()
         self.addCleanup(self._patch_login.stop)
 
-        # redirection stdout
         self._buf = StringIO()
         self._redir_ctx = redirect_stdout(self._buf)
         self._redir_ctx.__enter__()
         self.addCleanup(self._redir_ctx.__exit__, None, None, None)
 
-        # instanciation CLI
         from app.views.cli_interface import CLIInterface
         self.cli = CLIInterface(_DummyDB())
         self.cli.current_user = {"id": 42, "role": "commercial", "role_id": 1}
 
-    def tearDown(self):
+    def tearDown(self) -> None:
+        """Restaure la fonction *input* d’origine."""
         builtins.input = self._orig_input
 
-    def test_full_flow(self):
-        """Le sous-menu Gestion doit se dérouler sans erreur."""
+    # ------------------------------------------------------------------ #
+    def test_full_flow(self) -> None:
+        """Le sous‑menu Gestion se déroule sans lever d’exception."""
         try:
-            self.cli._write_menu()     # uniquement le menu Gestion
+            self.cli._write_menu()
         except StopIteration:
-            pass                       # fin normale
+            pass  # fin normale : plus d’inputs simulés
 
         out = self._buf.getvalue()
-        # Les trois entêtes doivent apparaître
         self.assertIn("-- Clients --", out)
         self.assertIn("-- Contrats (commercial) --", out)
         self.assertIn("-- Événements (commercial) --", out)

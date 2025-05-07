@@ -1,91 +1,92 @@
 """
-Parcours CLI pour un utilisateur de rôle « support »
-----------------------------------------------------
-Objectifs vérifiés
-  • Le sous-menu Événements est bien accessible depuis Gestion.
-  • L’action « Mes événements » est appelée exactement 1 fois.
-  • L’action « Mettre à jour un événement » est appelée exactement 1 fois.
-  • Aucune exception n’est levée pendant la navigation.
-Toutes les méthodes DataWriterView utilisées sont patchées pour éviter
-tout accès réel à la base.
+Tests CLI – parcours complet pour un utilisateur « support ».
+
+But :
+    • s’assurer que le sous‑menu *Événements* est bien accessible
+      depuis la section *Gestion* ;
+    • vérifier que les deux actions internes
+        – _display_my_events
+        – _update_my_event_cli
+      sont appelées exactement une fois ;
+    • garantir l’absence d’exception pendant la navigation.
+
+Toutes les méthodes de DataWriterView sont patchées : jamais d’accès
+réel à la base de données.
 """
+
+from __future__ import annotations
 
 import builtins
 import unittest
-from io import StringIO
 from contextlib import redirect_stdout
+from io import StringIO
 from unittest.mock import MagicMock, patch
 
-# ------------------------------------------------------------------ #
-#  Doubles très simples pour la couche « BD »                        #
-# ------------------------------------------------------------------ #
+
+class _DummySession:
+    """Session SQLAlchemy vide : aucune requête exécutée."""
+
+    def close(self) -> None:  # noqa: D401
+        pass
 
 
-class _DummySession:          # session inerte
-    def close(self): ...
+class _DummyDB:
+    """Connexion factice : renvoie toujours une _DummySession."""
 
-
-class _DummyDB:               # connection inerte
-    def create_session(self): return _DummySession()
-
-# ------------------------------------------------------------------ #
-#  Suite de tests                                                    #
-# ------------------------------------------------------------------ #
+    def create_session(self) -> _DummySession:  # noqa: D401
+        return _DummySession()
 
 
 class TestCLISupportFlow(unittest.TestCase):
-    # -------------------------- setUp ------------------------------ #
-    def setUp(self):
-        # ­Injecte les saisies clavier :
-        #   1) Gestion->Événements
-        #   2) Sous-menu: [1] Mes évts
-        #   3) Sous-menu: [2] Update
-        #   4) Retour sous-menu (0)
-        #   5) Retour Gestion (0)
-        self._orig_input = builtins.input
-        seq = iter(["1", "1", "2", "0", "0"])
-        builtins.input = lambda *_: next(seq)
+    """Parcours “Gestion → Événements” pour un rôle support."""
 
-        # Instancie le CLI avec une “BD” factice et un user support connecté
+    # ---------------------------------------------------------------- #
+    # setUp / tearDown
+    # ---------------------------------------------------------------- #
+    def setUp(self) -> None:
+        """Prépare le CLI, un utilisateur support et les patches nécessaires."""
+        # Injection de la séquence de réponses clavier
+        self._orig_input = builtins.input
+        answers = iter(["1", "1", "2", "0", "0"])
+        builtins.input = lambda *_: next(answers)
+
+        # Instanciation du CLI avec une base factice
         from app.views.cli_interface import CLIInterface
         self.cli = CLIInterface(_DummyDB())
         self.cli.current_user = {"id": 42, "role": "support", "role_id": 2}
 
-        # Patch des deux méthodes internes ajoutées dans DataWriterView
-        # (_display_my_events et _update_my_event_cli)
-        self._patch_display = patch.object(
-            self.cli.writer_v, "_display_my_events", MagicMock())
-        self._patch_update = patch.object(
-            self.cli.writer_v, "_update_my_event_cli", MagicMock())
+        # Patch des deux actions internes
+        self.p_display = patch.object(self.cli.writer_v,
+                                      "_display_my_events",
+                                      MagicMock())
+        self.p_update = patch.object(self.cli.writer_v,
+                                     "_update_my_event_cli",
+                                     MagicMock())
+        self.p_display.start()
+        self.p_update.start()
 
-        self._patch_display.start()
-        self._patch_update.start()
-
-    # ------------------------- tearDown ---------------------------- #
-    def tearDown(self):
+    def tearDown(self) -> None:
         builtins.input = self._orig_input
-        self._patch_display.stop()
-        self._patch_update.stop()
+        self.p_display.stop()
+        self.p_update.stop()
 
-    # --------------------------- test ------------------------------ #
-    def test_full_flow(self):
-        """Navigation complète : doit déclencher exactement les deux actions."""
+    # ---------------------------------------------------------------- #
+    # tests
+    # ---------------------------------------------------------------- #
+    def test_full_flow(self) -> None:
+        """La navigation doit appeler exactement les deux actions attendues."""
         with StringIO() as buf, redirect_stdout(buf):
-            # On teste uniquement le menu “Gestion”
             self.cli._write_menu()
-            console_out = buf.getvalue()
+            output = buf.getvalue()
 
-        # === Assertions ============================================ #
+        # Vérifications des appels
         self.cli.writer_v._display_my_events.assert_called_once()
         self.cli.writer_v._update_my_event_cli.assert_called_once()
 
-        # Vérifie que les entêtes principaux ont bien été imprimés.
-        self.assertIn("-- Gestion --", console_out)
-        self.assertIn("-- Événements (support) --", console_out)
+        # Vérification du contenu affiché
+        self.assertIn("-- Gestion --", output)
+        self.assertIn("-- Événements (support) --", output)
 
 
-# ------------------------------------------------------------------ #
-#  Lancement direct du fichier                                       #
-# ------------------------------------------------------------------ #
 if __name__ == "__main__":
     unittest.main()
