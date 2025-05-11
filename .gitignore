@@ -20,3 +20,4 @@ __pycache__
 CACHEDIR.TAG
 launch.json
 pyvenv.cfg
+flake8-report/
