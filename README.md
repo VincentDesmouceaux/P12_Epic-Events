@@ -54,7 +54,7 @@ DB_PORT=3306
 DB_NAME=epic_db
 
 # Sentry
-SENTRY_DSN=https://e47a0f56bbc36b31cff199a266b3a7f2@o4509281674199040.ingest.de.sentry.io/4509281676623952
+SENTRY_DSN=<votre_dsn_sentry>
 SENTRY_ENV=prod
 SENTRY_TRACES=1.0        
 SENTRY_PROFILE=1.0       
