@@ -73,7 +73,15 @@ SENTRY_TRACES=1.0
 
 SENTRY_PROFILE=1.0    
 
-SENTRY_SEND_PII=true     
+SENTRY_SEND_PII=true
+
+# JWT / Auth
+
+JWT_SECRET=
+
+JWT_ALGORITHM=
+
+JWT_EXPIRATION_MINUTES=
 
 ## Initialiser la base & données de démo
 
