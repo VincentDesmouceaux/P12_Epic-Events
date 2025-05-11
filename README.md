@@ -31,15 +31,21 @@ _Gérez vos clients, contrats & événements depuis un simple terminal – en to
 
 # 1. Cloner le dépôt
 git clone https://github.com/VincentDesmouceaux/P12_Epic-Events.git
+
 cd P12_Epic-Events
 
-# 2. Installer Pipenv (si absent)
+# 2. Préparer les variables d’environnement
+cp .env.example .env          
+
+ puis ouvrez .env et remplissez vos vraies valeurs
+
+# 3. Installer Pipenv (si absent)
 pipx install pipenv          
 
-# 3. Créer l’environnement virtuel + dépendances
-pipenv install --dev         
+# 4. Créer l’environnement virtuel + dépendances
+pipenv install    
 
-# 4. Activer le shell virtuel
+# 5. Activer le shell virtuel
 pipenv shell
 
 
@@ -47,36 +53,57 @@ pipenv shell
 
 # BDD
 DB_ENGINE=mysql+pymysql
+
 DB_USER=epicuser
-DB_PASSWORD=some_strong_password
+
+DB_PASSWORD=
+
 DB_HOST=localhost
+
 DB_PORT=3306
+
 DB_NAME=epic_db
 
 # Sentry
 SENTRY_DSN=<votre_dsn_sentry>
+
 SENTRY_ENV=prod
-SENTRY_TRACES=1.0        
-SENTRY_PROFILE=1.0       
+
+SENTRY_TRACES=1.0     
+
+SENTRY_PROFILE=1.0    
+
 SENTRY_SEND_PII=true     
 
 ## Initialiser la base & données de démo
 
 mysql -u root -p
+
 mysql> DROP DATABASE IF EXISTS epic_db;
+
 mysql> DROP USER IF EXISTS 'epicuser'@'localhost';
+
 mysql> CREATE DATABASE epic_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-mysql> SHOW VARIABLES LIKE 'validate_password.policy'; 
+
+mysql> SHOW VARIABLES LIKE 'validate_password.policy';
+
 mysql> SET GLOBAL validate_password.policy = 0;
-mysql> SET GLOBAL validate_password.length = 8;             
+
+mysql> SET GLOBAL validate_password.length = 8;
+
 mysql> CREATE USER 'epicuser'@'%' IDENTIFIED BY 'some_strong_password';
+
 mysql> GRANT ALL PRIVILEGES ON epic_db.* TO 'epicuser'@'%';
+
 mysql> FLUSH PRIVILEGES;
+
 mysql> EXIT;
 
 ## Lancer l’application
 
 python3 -m main (cela aura pour effet d'initialiser les données de seed_db.py)
+
+Utiliser les informations se trouvant dans les données d'exemple du fichier seed_db.py pour tester l'application.
 
 ## Vérifier l’intégration Sentry
 
@@ -94,6 +121,7 @@ python3 -m unittest discover -s tests
 flake8
 
 pipenv run coverage run -m unittest discover -s tests
+
 pipenv run coverage html
 
 ## 🗺️ Schéma SQL (ERD)
@@ -158,8 +186,11 @@ pipenv run coverage html
 ## 🤝 Contribuer
 
 1. **Fork** puis créez une branche (`feat/ma-feature`)
+
 2. Installez les dépendances : pipenv install --dev
+
 3. Codez !💚
+
 4. Open Pull‑Request ✨
 
 *Happy coding & have an **Epic** day ! 🚀*
