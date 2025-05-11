@@ -21,3 +21,4 @@ CACHEDIR.TAG
 launch.json
 pyvenv.cfg
 flake8-report/
+schema.png
