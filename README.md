@@ -98,7 +98,7 @@ pipenv run coverage html
 
 ## 🗺️ Schéma SQL (ERD)
 
-erDiagram
+
     ROLE ||--o{ USER : "1‑n"
     USER ||--o{ CLIENT : "1‑n  (commercial_id)"
     USER ||--o{ CONTRACT : "1‑n  (commercial_id)"
